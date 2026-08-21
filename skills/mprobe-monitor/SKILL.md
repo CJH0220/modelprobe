@@ -5,7 +5,7 @@ description: 判定一个 API 端点有没有悄悄变差（降智监控），�
 
 # mprobe-monitor — 降智监控与定时任务
 
-工具位于 `06_modelprobe/`，入口为 `python -m mprobe`。
+工具位于本仓库根目录，入口为 `python -m mprobe`。
 
 **本 skill 不含任何判定逻辑。** 三态判定、连击计数、阈值比较全部在 CLI 内完成。
 **禁止自行比较两轮分数得出结论。**

@@ -83,7 +83,7 @@ MCP 工具和 Skill 如果各自实现一遍打分，迟早出现"两个界面�
 不出现在**任何路径、文件名、字段名、维度代号**里。
 
 ```
-06_modelprobe/
+modelprobe/
 ├── README.md  GUIDE.md  DEPLOY.md  DESIGN.md  MEASUREMENT.md
 │
 ├── mprobe/                      ← Python 包，零第三方依赖

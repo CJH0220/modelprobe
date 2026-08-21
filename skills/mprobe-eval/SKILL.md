@@ -5,7 +5,7 @@ description: 测评一个 API 端点的能力水平（绝对水平，不需要�
 
 # mprobe-eval — 端点能力测评
 
-工具位于 `06_modelprobe/`，入口为 `python -m mprobe`。
+工具位于本仓库根目录，入口为 `python -m mprobe`。
 
 **本 skill 不含任何测量逻辑。** 全部判分、算分、聚合都在 CLI 内完成，
 你的职责是选对命令、把边界如实转述给用户。**禁止自行计算或换算分数。**

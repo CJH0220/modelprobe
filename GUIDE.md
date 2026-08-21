@@ -10,16 +10,20 @@
 
 ## 一、完整流程（照着一行一行执行）
 
-全部命令在 `06_modelprobe/` 目录下执行。
+全部命令在仓库根目录下执行。
 
-### 第 1 步：自检
+### 第 1 步：取得代码并自检
 
 ```bash
-cd <仓库所在目录>
+git clone https://github.com/CJH0220/modelprobe.git
+cd modelprobe
+git checkout v1.0.0
 python tools/check_all.py
 ```
 
 看到末行 `未通过 0` 才继续。不是 0 就先停下。
+刚 clone 完会有一条显示 `未验证`，那是正常的（它要等你跑过一轮才能验）。
+已经有代码的，只跑最后一条即可。
 
 ### 第 2 步：确认端点和密钥
 

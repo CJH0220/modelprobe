@@ -122,7 +122,8 @@ def group_script(idx, title, script):
                        errors="replace")
     out = (p.stdout or "") + (p.stderr or "")
     for line in out.splitlines():
-        if line.strip().startswith(("✓", "✗", "对不上", "通过", "未通过")):
+        if line.strip().startswith(("✓", "✗", "⚠", "对不上",
+                                    "通过", "未通过")):
             print("  " + line.strip())
     item(title, script, p.returncode == 0,
          "退出码 %d" % p.returncode)

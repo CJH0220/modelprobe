@@ -709,7 +709,13 @@ def cmd_status(args):
 def cmd_compare(args):
     con = _readonly_db(args)
     if con is None:
-        return _no_db(args)
+        # 这里**不能**走 _no_db。_no_db 回「还没有任何记录」+ 退出码 0，
+        # 那是列表类命令的正确答案；而 compare 是用户点名了两个对象，
+        # 「库都不存在」意味着这两个 run 一定不存在，是错误而非空结果。
+        # 与 db.compare_runs 的报错保持同一措辞，使有库无库行为一致。
+        _die("run 不存在：%s、%s（%s 不存在，还没有跑过任何一轮）"
+             % (args.run_a, args.run_b, paths.DB),
+             as_json=getattr(args, "json", False))
     try:
         a, b = db.compare_runs(con, args.run_a, args.run_b)
     except db.StoreError as e:

@@ -5,8 +5,7 @@
 > 安装脚本、只读浏览器界面均已就位；监控闭环已在真实端点上完成
 > 采集 → 建基线 → 判定的全流程验证。
 >
-> 实施计划第 3.7 项（浏览器内写操作）**定为不做**，界面保持只读，理由见
-> 实施计划。
+> 浏览器界面**保持只读**（POST 一律返回 405）：增删端点与发起测评走 CLI 或 MCP。
 >
 > 上手请读 [`GUIDE.md`](GUIDE.md)。代码或题库变更后执行
 > `python tools/check_all.py`（九组自检，零请求零成本）。
@@ -27,6 +26,12 @@
 ## 常用命令
 
 零第三方依赖，Python ≥ 3.9 标准库即可运行（`requirements.txt` 故意为空）。
+
+```bash
+git clone https://github.com/CJH0220/modelprobe.git
+cd modelprobe && git checkout v1.0.0
+python tools/check_all.py            # 自检，零请求零成本
+```
 
 ```bash
 python install.py                                                  # 装 MCP 与 Skill（先预演）

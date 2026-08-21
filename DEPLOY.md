@@ -27,18 +27,32 @@
 
 ---
 
-## 二、安装
+## 二、获取与安装
 
-### 2.1 方式一：直接运行（推荐）
+### 2.1 取得代码
 
 ```bash
-cd 06_modelprobe
+git clone https://github.com/CJH0220/modelprobe.git
+cd modelprobe
+git checkout v1.0.0
+```
+
+**第三行不要省。** 版本号即 `bank_rev`，跟随 `main` 会在某次 `git pull` 后
+使既有基线失效；固定到标签则不会。查看可用版本用 `git tag`。
+
+也可以下载 zip 解压，但须注意**题库文件的行尾必须为 LF**：
+仓库以 `.gitattributes` 声明 `*.jsonl text eol=lf`，若取得代码的途径做过
+换行转换，sha256 校验会失败、工具拒绝运行。此时改用 `git clone`。
+
+### 2.2 方式一：直接运行（推荐）
+
+```bash
 python -m mprobe --help
 ```
 
 无需安装。题库、档案、配置、产物目录均按仓库根定位。
 
-### 2.2 方式二：安装为包
+### 2.3 方式二：安装为包
 
 ```bash
 pip install -r requirements-dev.txt   # setuptools，3.12 起不再随发行版附带
@@ -49,14 +63,14 @@ mprobe --help                         # 等价于 python -m mprobe
 安装后仍须**在仓库根执行**——路径关系不变。
 因此方式二相对方式一并无实质收益，仅在需要把 `mprobe` 暴露为系统命令时使用。
 
-### 2.3 题库不走 pip 分发
+### 2.4 题库不走 pip 分发
 
 题库是需要随版本审阅与冻结的数据，其变更等同于改题，会使既有结果不可比。
 经 pip 分发意味着依赖解析器可以在使用者不知情的情况下更换题库版本，
 这与「题库随版本冻结、由工具拒绝跨版本比较来保证可比性」直接冲突。
 故题库随仓库分发，`bank_rev` 与代码版本强绑定，`sha256` 每次加载校验。
 
-### 2.4 自检（强制门槛）
+### 2.5 自检（强制门槛）
 
 ```bash
 python tools/check_all.py
@@ -66,6 +80,10 @@ python tools/check_all.py
 
 **自检未通过时不要继续部署。** 其中「一致性」与「依赖」两组检查的是
 声明与实际是否一致——这类不一致不会在运行时报错，只会使全部结论偏移。
+
+刚 clone 完会看到 `未验证 1`：有一条需要结果库里存在两个不同 `bank_rev`
+的轮次才能构造，跑过一轮之后即可验。**未验证不计入失败**，
+它单列一态是为了不把「没验到」记成「通过」。
 
 > `tools/` 下另有两个**题库构建期**脚本（`build_public_bank.py`、
 > `replay_round_sd.py`）。二者需以 `--source` / `--archive` 显式指定外部
@@ -162,7 +180,7 @@ python -m mprobe schedule status --json     # 核对 exists 为 true
 Linux / macOS 用 cron 直接调用 CLI：
 
 ```cron
-0 9 * * * cd /path/to/06_modelprobe && /usr/bin/python3 -m mprobe check \
+0 9 * * * cd /path/to/modelprobe && /usr/bin/python3 -m mprobe check \
           --model deepseek --tier monitor --yes >> /var/log/mprobe.log 2>&1
 ```
 
@@ -220,6 +238,12 @@ Skill 与 MCP 是两套独立机制，二者均为 CLI 的门面，不含测量�
 | 既有基线失效 | 重新采集轮次并构建基线 |
 | 跨版本分数不可比 | 工具直接拒绝该比较，非警告 |
 | 判分器可能变更 | 用 `raw.jsonl` 重放可重算历史，无需重新采样 |
+
+```bash
+git fetch --tags
+git checkout v<新版本>          # 先读 CHANGELOG 再决定升不升
+python tools/check_all.py
+```
 
 升级前先读 [`CHANGELOG.md`](CHANGELOG.md)。
 

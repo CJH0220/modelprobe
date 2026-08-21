@@ -42,7 +42,18 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
 PY = sys.executable or "python"
-PASS, FAIL = [], []
+PASS, FAIL, SKIP = [], [], []
+
+
+def skip(name, why):
+    """前置数据不具备，**这一条没有被验到**。
+
+    不记通过 —— 那就成了一个恒真的检查。也不记失败 —— 全新 clone 上
+    没有结果库属正常，而文档要求自检全绿才继续部署。故单列一态，
+    并在汇总里显式点出未验到几条。
+    """
+    SKIP.append(name)
+    print("  ⚠ 未验证 %s  —— %s" % (name, why))
 
 
 def check(name, ok, detail=""):
@@ -135,15 +146,16 @@ def t_cross_bank_rev():
         check("跨 bank_rev 比较 → 拒绝", False, "没有 BankRevMismatch 异常类")
         return
     if not os.path.isfile(paths.DB):
-        check("跨 bank_rev 比较 → 拒绝", False, "没有结果库，测不了")
+        skip("跨 bank_rev 比较 → 拒绝",
+             "本机还没有结果库（全新 clone 时属正常，跑过一轮后即可验）")
         return
     con = db.connect(paths.DB)
     pairs = con.execute(
         "select a.run_id, b.run_id from runs a, runs b "
         "where a.bank_rev <> b.bank_rev limit 1").fetchall()
     if not pairs:
-        check("跨 bank_rev 比较 → 拒绝", False,
-              "库里找不到两个不同 bank_rev 的轮次，这一条**没被验到**")
+        skip("跨 bank_rev 比较 → 拒绝",
+             "库里没有两个不同 bank_rev 的轮次，构造不出该场景")
         return
     a, b = pairs[0]
     try:
@@ -263,7 +275,12 @@ def main():
     print("\n[文本上的拒绝（Skill 说明书）]")
     t_skill_negatives()
 
-    print("\n通过 %d ／ 未通过 %d" % (len(PASS), len(FAIL)))
+    print("\n通过 %d ／ 未通过 %d ／ 未验证 %d"
+          % (len(PASS), len(FAIL), len(SKIP)))
+    if SKIP:
+        print("未验证（缺前置数据，不计入失败）：")
+        for x in SKIP:
+            print("  ⚠ %s" % x)
     if FAIL:
         print("未通过：")
         for x in FAIL:
