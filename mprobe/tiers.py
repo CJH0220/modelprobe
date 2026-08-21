@@ -91,7 +91,7 @@ TIERS = {
         "banks": ["core.jsonl", "public_v1.jsonl"],
         "cadence": "adhoc",
         "purpose": ("跑全部题，用来**测题**而不是测模型：算每题的通过率与"
-                    "跨模型极差，供 实施计划第 1.3 项/1.4 定版题库。"
+                    "跨模型极差，供定版题库时使用。"
                     "只能 eval，不产基线。"),
         "baseline_rounds": 0,
     },

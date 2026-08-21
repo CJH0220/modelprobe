@@ -1,35 +1,14 @@
-# 部署说明
+# 部署手册
 
-> 本文描述**如何把 mprobe 装到一台机器上并投入运行**。
-> 日常操作流程见 [`GUIDE.md`](GUIDE.md)，题库与指标定义见
-> [`BANK_AND_METRICS.md`](BANK_AND_METRICS.md)，口径论证见
-> [`MEASUREMENT.md`](MEASUREMENT.md)。
-
----
-
-## 一、环境要求
-
-| 项 | 要求 | 说明 |
-|---|---|---|
-| Python | ≥ 3.9 | 本机实测 3.14.7 |
-| 运行时依赖 | **无** | `requirements.txt` 故意为空，由 `tools/check_deps.py` 强制 |
-| 构建期依赖 | 仅「安装为包」需要 | `pip install -r requirements-dev.txt` |
-| 磁盘 | 代码与题库约 1.5 MB，运行产物按需增长 | 单轮 `probe` 档约 800 KB，`monitor` 档约 50 KB |
-| 网络 | 仅出站 HTTPS，指向被测端点 | 工具自身不联网取价、不取汇率、不上报 |
-| 操作系统 | Windows / Linux / macOS | 定时任务仅实现 Windows `schtasks`，其他平台见 4.2 |
-
-**零依赖不是简洁偏好，而是可比性的前提。** 依赖树中任何一个包的版本变动
-都可能改变判分结果，而这种变动不体现在 `bank_rev` 上，
-于是由此产生的不可比性无法被检测到。
-
-> **不要清理 `data/runs/*/raw.jsonl`。** 判分器变更后需用它重放重算，
-> 否则只能重新采样。`data/` 已在 `.gitignore` 中，不进版本管理。
+> 从上往下一条一条敲。每步都给了**敲完应该看到什么**。
+> 需要 Python ≥ 3.9，不需要装任何第三方包。
+> 装完之后日常怎么用，见 [`GUIDE.md`](GUIDE.md)。
 
 ---
 
-## 二、获取与安装
+# 第一部分 · 装
 
-### 2.1 取得代码
+## 1. 取代码
 
 ```bash
 git clone https://github.com/CJH0220/modelprobe.git
@@ -37,256 +16,362 @@ cd modelprobe
 git checkout v1.0.0
 ```
 
-**第三行不要省。** 版本号即 `bank_rev`，跟随 `main` 会在某次 `git pull` 后
-使既有基线失效；固定到标签则不会。查看可用版本用 `git tag`。
+第三行不要省。查有哪些版本用 `git tag`。
 
-也可以下载 zip 解压，但须注意**题库文件的行尾必须为 LF**：
-仓库以 `.gitattributes` 声明 `*.jsonl text eol=lf`，若取得代码的途径做过
-换行转换，sha256 校验会失败、工具拒绝运行。此时改用 `git clone`。
-
-### 2.2 方式一：直接运行（推荐）
-
-```bash
-python -m mprobe --help
-```
-
-无需安装。题库、档案、配置、产物目录均按仓库根定位。
-
-### 2.3 方式二：安装为包
-
-```bash
-pip install -r requirements-dev.txt   # setuptools，3.12 起不再随发行版附带
-pip install -e .
-mprobe --help                         # 等价于 python -m mprobe
-```
-
-安装后仍须**在仓库根执行**——路径关系不变。
-因此方式二相对方式一并无实质收益，仅在需要把 `mprobe` 暴露为系统命令时使用。
-
-### 2.4 题库不走 pip 分发
-
-题库是需要随版本审阅与冻结的数据，其变更等同于改题，会使既有结果不可比。
-经 pip 分发意味着依赖解析器可以在使用者不知情的情况下更换题库版本，
-这与「题库随版本冻结、由工具拒绝跨版本比较来保证可比性」直接冲突。
-故题库随仓库分发，`bank_rev` 与代码版本强绑定，`sha256` 每次加载校验。
-
-### 2.5 自检（强制门槛）
+## 2. 自检
 
 ```bash
 python tools/check_all.py
 ```
 
-**通过判据**：末行 `总计 N 项，通过 N，未通过 0`。九组检查，零请求零成本。
+看最后两行：
 
-**自检未通过时不要继续部署。** 其中「一致性」与「依赖」两组检查的是
-声明与实际是否一致——这类不一致不会在运行时报错，只会使全部结论偏移。
+```
+============================================================
+总计 43 项，通过 43，未通过 0
+```
 
-刚 clone 完会看到 `未验证 1`：有一条需要结果库里存在两个不同 `bank_rev`
-的轮次才能构造，跑过一轮之后即可验。**未验证不计入失败**，
-它单列一态是为了不把「没验到」记成「通过」。
+**`未通过` 必须是 0**，不是 0 就停下，别往下走。
 
-> `tools/` 下另有两个**题库构建期**脚本（`build_public_bank.py`、
-> `replay_round_sd.py`）。二者需以 `--source` / `--archive` 显式指定外部
-> 数据路径，其产物已随仓库发布，运行时无需重新生成。不提供路径时它们
-> 给出提示并退出，不影响其余功能。
+中间会有一条 `⚠ 未验证`，刚装完出现这条是正常的：
+
+```
+  ⚠ 未验证 跨 bank_rev 比较 → 拒绝  —— 本机还没有结果库（全新 clone 时属正常，跑过一轮后即可验）
+  通过 16 ／ 未通过 0 ／ 未验证 1
+```
+
+## 3. 确认能跑
+
+```bash
+python -m mprobe bank info
+```
+
+```
+== 题库 1.0.0 ==
+冻结于 2026-08-21 11:44:24 ｜ 253 题 ｜ 可用于监控 35 题
+```
+
+看到 `题库 1.0.0` 和 `253 题` 就对了。
+
+> 报 `题库校验失败，拒绝运行` 的话，用 `git clone` 重新取一次，不要用 zip 解压。
+
+## 4.（可选）装成系统命令
+
+```bash
+pip install -r requirements-dev.txt
+pip install -e .
+mprobe --help
+```
+
+装完 `mprobe` 等于 `python -m mprobe`，但**仍然要在仓库目录里执行**。
+不装也能用，跳过这步没有任何影响。
 
 ---
 
-## 三、配置
+# 第二部分 · 配
 
-### 3.1 端点定义
+## 5. 看现有端点
 
 ```bash
-cp config/models/_template.json config/models/myendpoint.json
+python -m mprobe config list
 ```
 
-| 字段 | 说明 |
-|---|---|
-| `model.base_url` `model.model` | 端点地址与模型标识 |
-| `model.api_style` | `openai` 或 `anthropic` |
-| `model.api_key_env` | 密钥所在的环境变量名 |
-| `model.max_tokens` | 推理模型须给足，见 3.3 |
-| `run.trials` | 每题采样次数，默认 3 |
-| `run.qps` | 限速网关须填，否则耗时估算失真 |
-| `pricing` | 单价与币种。缺失时工具拒绝执行 |
+```
+== 端点 ==
+| key | 模型 | 指纹 | 密钥 | 默认 |
+|---|---|---|---|---|
+| deepseek | deepseek-v4-flash | c1079e441bbb | 未设置：DEEPSEEK_API_KEY | ✓ |
+| qwen | qwen3.6-flash | b3504bcdec06 | 未设置：DASHSCOPE_API_KEY |  |
+```
 
-**该文件纳入版本管理，不得写入密钥。**
-它的四个字段（模型、地址、温度、`max_tokens`）构成端点指纹，
-任一变更都会使既有基线失效。
+`密钥` 那列写 `未设置：XXX` 就是缺密钥，`XXX` 是要填的环境变量名。
 
-### 3.2 密钥
+## 6. 填密钥
+
+Windows：
 
 ```powershell
-# Windows：用户级环境变量
-[Environment]::SetEnvironmentVariable("MY_API_KEY","sk-xxx","User")
+[Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY","你的密钥","User")
 ```
+
+Linux / macOS：
 
 ```bash
-# Linux / macOS
-echo 'export MY_API_KEY=sk-xxx' >> ~/.bashrc
+echo 'export DEEPSEEK_API_KEY=你的密钥' >> ~/.bashrc
 ```
 
-或写入 `config/secrets.local.json`（已 gitignore）：`{ "MY_API_KEY": "sk-xxx" }`
+**填完关掉终端，重新开一个**，然后再跑一次第 5 步：
 
-**定时任务必须用用户级环境变量或 `secrets.local.json`。**
-会话级变量对计划任务不可见，失败表现为静默无输出。
+```
+| deepseek | deepseek-v4-flash | c1079e441bbb | sk-…a278（env） | ✓ |
+```
 
-验证用 `python -m mprobe config list`。工具**只输出掩码**，任何路径下不输出明文。
+密钥那列变成 `sk-…xxxx` 就成了。
 
-### 3.3 `max_tokens` 的确定
+> 也可以新建 `config/secrets.local.json`，内容 `{ "DEEPSEEK_API_KEY": "你的密钥" }`，
+> 这个文件不会被提交。此时那列显示 `（file）`。
 
-推理模型的输出 token 绝大部分消耗于推理过程，不可见。实测某端点
-`max_tokens = 16000` 时 26 道题被截断，其中多数可见输出为 0 字符。
+## 7. 加自己的端点
 
-**截断导致的 0 分是配额问题而非能力问题**，据此判定题目过难会删除本可用的题目。
-方法：跑一轮 `monitor` 档，检查输出中的「截断」计数，非 0 则提升后重测。
+```bash
+cp config/models/_template.json config/models/myapi.json
+```
 
-**该值须在建基线之前确定**——变更它会改变端点指纹，已建基线随之失效。
+打开 `config/models/myapi.json`，填这几项：
 
-### 3.4 汇率（多币种时）
+| 要填的 | 填什么 |
+|---|---|
+| `model.base_url` | 端点地址 |
+| `model.model` | 模型名 |
+| `model.api_style` | `openai` 或 `anthropic` |
+| `model.api_key_env` | 环境变量名，例如 `MYAPI_API_KEY` |
+| `model.max_tokens` | 先填 32000 |
+| `run.qps` | 端点有限速就填，没有就删掉这行 |
+| `pricing` | 输入输出单价和币种 |
 
-`config/pricing.json` 的 `fx` 字段，**手工维护，工具永不联网获取**——
-测评中拉取可能不可用的汇率接口会导致本可完成的轮次失败。
-折算值在输出中一律附带汇率与来源。
+**这个文件里不要写密钥。** 填完跑第 5 步确认它出现在表里，
+文件名就是以后 `--model` 用的名字（`myapi.json` → `--model myapi`）。
+
+> `pricing` 不填的话，工具会报 `价格未配置，无法估算花费` 并拒绝执行。
 
 ---
 
-## 四、投入运行
+# 第三部分 · 跑
 
-### 4.1 首次基线
+下面把 `deepseek` 换成你自己的端点名。
 
-按 [`GUIDE.md`](GUIDE.md) 第 3–7 步执行。部署场景下额外加一步核对：
+## 8. 先看要花多少钱
 
 ```bash
-python -m mprobe status --json      # 核对各轮 endpoint_sha 与 bank_rev 全同
+python -m mprobe eval --model deepseek --tier monitor --dry-run
 ```
 
-**该步不可跳过。** 存在 `endpoint_sha` 或 `bank_rev` 不一致的轮次
-即不得纳入同一基线——不同配置下的测量结果不可合并。
+```
+== 本轮计划 ==
+模型 deepseek（c1079e441bbb）· 档位 monitor · 题库 1.0.0
+最小可检出退化 15.4 分 ｜ 95% 区间半宽 ±15.1 分
+预估花费 0.06 CNY ｜ 预估耗时 1 分钟
+14 题 x 3 次 = 42 次请求，并发 4，输入约 2,202 token、输出约 29,400 token
+```
 
-### 4.2 定时任务
+`--dry-run` 不发请求、不花钱。想看别的档位有多大多贵：
+
+```bash
+python -m mprobe tiers
+```
+
+## 9. 跑第一轮
+
+```bash
+python -m mprobe eval --model deepseek --tier monitor --yes
+```
+
+跑完打开 `data/runs/<run_id>/report.md`，看两处：
+
+```
+- 请求成功 42/42，失败率 0.0%
+```
+
+```
+| 输出被截断 | 0（其中 0 次完全没有可见内容） |
+```
+
+失败率高的这轮不要用；截断不是 0 就去做第 10 步。
+
+## 10. 如果有截断
+
+打开 `config/models/<端点>.json`，把 `max_tokens` 调大（32000 → 64000），
+然后重跑第 9 步，直到 `截断 0`。
+
+**这一步必须在建基线之前做完。** 改完 `max_tokens` 之前跑的轮次不能再用。
+
+## 11. 再跑四轮
+
+```bash
+python -m mprobe eval --model deepseek --tier monitor --yes
+python -m mprobe eval --model deepseek --tier monitor --yes
+python -m mprobe eval --model deepseek --tier monitor --yes
+python -m mprobe eval --model deepseek --tier monitor --yes
+```
+
+跑完确认五轮的配置一致：
+
+```bash
+python -m mprobe status
+```
+
+```
+== 最近 15 轮 ==
+| run_id | 类型 | 模型 | 档 | 分数 | 请求 | 失败 | 健康 |
+|---|---|---|---|---:|---:|---:|---|
+| deepseek-monitor-eval-20260821-095247 | eval | deepseek | monitor | 91.7 | 42 | 0 | ok |
+| deepseek-monitor-eval-20260821-094924 | eval | deepseek | monitor | 90.7 | 42 | 0 | ok |
+```
+
+`健康` 都是 `ok`、`失败` 都是 0 就往下走。
+
+## 12. 建基线
+
+```bash
+python -m mprobe baseline --build --model deepseek --tier monitor
+```
+
+不发请求、不花钱，用第 9、11 步已经跑好的数据算。会打印三行，看中间那行：
+
+```
+告警阈值 = 均值 − 2σ = **<你的数字> 分**
+```
+
+出现这行就成了。
+
+> 多出一行 `**这是临时基线**` 说明轮数还不够五轮，补够会自动转正。
+
+## 13. 做一次判定
+
+```bash
+python -m mprobe check --model deepseek --tier monitor --yes
+```
+
+输出是 `正常` / `观察` / `告警` 三种之一。**到这里部署就算完成了。**
+
+---
+
+# 第四部分 · 挂上（都可选）
+
+## 14. 每天自动跑
 
 Windows：
 
 ```bash
-python -m mprobe schedule install --model <端点> --tier monitor \
-       --cadence daily --at 09:00
-python -m mprobe schedule status --json     # 核对 exists 为 true
+python -m mprobe schedule install --model deepseek --tier monitor --cadence daily --at 09:00
+python -m mprobe schedule status --json
 ```
 
-状态读取 `schtasks /query` 的实际结果，不读配置文件——配置声明「已启用」
-而任务实际未安装，是此类工具最常见的静默失效形态。
+第二条的输出里 `"exists": true` 才算装上。没装上会显示：
 
-Linux / macOS 用 cron 直接调用 CLI：
+```
+mprobe_deepseek_small：不存在
+  note = 系统里没有这个任务（哪怕配置里写着有）
+```
+
+Linux / macOS 用 cron：
 
 ```cron
 0 9 * * * cd /path/to/modelprobe && /usr/bin/python3 -m mprobe check \
           --model deepseek --tier monitor --yes >> /var/log/mprobe.log 2>&1
 ```
 
-**必须携带 `--yes`**：无人在场时缺少该参数一律视为拒绝。
-**退出码即告警信号**（`1` = 告警）。
+**`--yes` 不能省。** 退出码 `1` 就是告警。
 
-### 4.3 告警推送（可选）
+## 15. 告警推送到群
 
-`config/notify.json`，不存在则不推送且不报错：
+新建 `config/notify.json`：
 
 ```json
-{ "enabled": true, "webhook": "https://open.feishu.cn/...", "policy": "abnormal" }
+{
+  "enabled": true,
+  "webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/你的地址",
+  "policy": "abnormal"
+}
 ```
 
-`policy` 取 `abnormal` 时仅在观察／告警态推送。**webhook 必须为 https。**
-显示时 URL 仅保留域名与前两段路径——常见平台的 token 位于路径中。
+`policy` 填 `abnormal` 就只在观察／告警时推。webhook 必须是 `https`。
+不建这个文件就不推送，也不报错。
 
-推送失败不影响判定：一次已完成并已出判定的 check 不应因 webhook 故障而失败。
-
-### 4.4 浏览器界面（可选）
+## 16. 浏览器界面
 
 ```bash
-python -m mprobe web            # http://127.0.0.1:8790
+python -m mprobe web
 ```
 
-**仅绑定 `127.0.0.1`，不提供 `--host` 参数。** 该服务可读取全部测评历史
-与端点配置；绑定 `0.0.0.0` 等于将其暴露给整个网段。
-将安全性实现为可修改的默认值等于未实现。远程访问走端口转发：
+```
+界面已起：http://127.0.0.1:8790
+只绑 127.0.0.1 —— 要远程看请用 ssh -L 8790:127.0.0.1:8790
+Ctrl-C 停止
+```
+
+浏览器打开那个地址。界面只能看，不能改东西。
+
+## 17. 装进 Claude
 
 ```bash
-ssh -L 8790:127.0.0.1:8790 <user>@<host>
+python install.py
 ```
 
-界面为**只读**（POST 一律返回 405）。发起测评走 CLI 或 MCP。
+先只打印将要改什么，不动文件：
 
-### 4.5 MCP 与 Skill（可选）
+```
+mprobe 安装 —— 根目录 <仓库目录>
+模式：预演（不改任何文件）
+
+[1/4] 自检
+  ✓ Python 3.14.7
+  ✓ 目录结构完整
+  ✓ data/ 可写
+  ✓ 题库 1.0.0，253 道题
+```
+
+看着没问题再真写：
 
 ```bash
-python install.py            # 预演，不动文件
-python install.py --apply    # 写入
+python install.py --apply
 ```
 
-写入五处用户级配置，均先备份并打印 diff，已存在且内容不同时不覆盖。
-Skill 与 MCP 是两套独立机制，二者均为 CLI 的门面，不含测量逻辑。
-安装后须**新开会话**才会被发现。
+装完**新开一个 Claude 会话**，直接说「测一下 deepseek 什么水平」。
+
+> 打印 `**不覆盖。**` 说明那一项已经存在且内容不同，需要手动处理。
 
 ---
 
-## 五、升级与回滚
+# 第五部分 · 装完核对
 
-版本号即 `bank_rev`。升级意味着：
+一条一条跑，对上右边就行：
 
-| 影响 | 处置 |
+| 跑什么 | 要看到 |
 |---|---|
-| 既有基线失效 | 重新采集轮次并构建基线 |
-| 跨版本分数不可比 | 工具直接拒绝该比较，非警告 |
-| 判分器可能变更 | 用 `raw.jsonl` 重放可重算历史，无需重新采样 |
+| `python tools/check_all.py` | `未通过 0` |
+| `python tools/check_deps.py` | `零第三方依赖` |
+| `python -m mprobe bank info` | `题库 1.0.0`、`253 题` |
+| `python -m mprobe config list` | 你的端点，密钥列是 `sk-…` |
+| `python -m mprobe eval --model X --tier monitor --dry-run` | 有花费和耗时，不报 `渠道不通` |
+| `python -m mprobe baseline --model X --tier monitor` | `告警阈值 = 均值 − 2σ` |
+| `python -m mprobe check --model X --tier monitor --dry-run` | 不报 `选不出足够的题` |
+| `python -m mprobe schedule status --json` | `"exists": true` |
+| `python tools/inventory.py` | 跑完无报错 |
+
+---
+
+# 第六部分 · 出错对照表
+
+| 报什么 | 怎么办 |
+|---|---|
+| `题库校验失败，拒绝运行` | 用 `git clone` 重新取，别用 zip |
+| `找不到端点配置` | `--model` 后面要写 `config/models/` 里的**文件名**，不带 `.json` |
+| `价格未配置，无法估算花费` | 端点 json 里补 `pricing` 段 |
+| `渠道不通` 但端点确实能用 | 端点 json 里加一行 `"probe_timeout": 60` |
+| 密钥填了还说 `未设置` | 关掉终端重新开一个 |
+| `选不出足够的题` | 换 `--tier monitor` |
+| 某个维度全是 0 分 | 看有没有截断，有就调大 `max_tokens` 重跑 |
+| `这条序列还没有基线` | 还没建过。先做第 12 步 |
+| `没有可用于建基线的轮次` | 那几轮和当前配置对不上。四项必须全同：模型、端点指纹、**题库版本**、档位。用 `python -m mprobe status --json` 逐项核对 |
+| `run 不存在` | run_id 打错了，用 `python -m mprobe status` 抄 |
+| `pip install -e .` 报 `BackendUnavailable` | 先 `pip install -r requirements-dev.txt` |
+| 在别的目录敲 `mprobe` 报找不到 `banks/` | 回到仓库目录再敲 |
+| 界面打开是空白 | 换个端口：先看启动时打印的地址对不对 |
+| 定时任务没跑 | 查三个：`"exists": true`、命令里有 `--yes`、密钥是用户级 |
+
+---
+
+# 升级和回退
 
 ```bash
 git fetch --tags
-git checkout v<新版本>          # 先读 CHANGELOG 再决定升不升
+git tag                      # 看有哪些版本
+git checkout v<新版本>
 python tools/check_all.py
 ```
 
-升级前先读 [`CHANGELOG.md`](CHANGELOG.md)。
+**换版本后基线要重建**，回第 9 到 12 步。
+回退用 `git checkout v1.0.0`，`data/` 里的东西不受影响。
 
-**判分器变更后的历史重算**：判分器变更等同于改题。实测一次判分器缺陷修复
-使同一批存档响应的通过率由 79.5% 变为 89.5%——该虚假变化的量级超过
-多数真实的模型间差异。重算不需要重新采样：
-
-```bash
-python tools/probe_analyze.py data/runs/<run_id> --write
-```
-
-该脚本用**当前**判分器重放 `raw.jsonl`，并报出与历史记录的分歧条数。
-
-**回滚**用 `git checkout <旧版本 tag>`。`data/` 不进版本管理，运行产物不受影响；
-但基线与 `bank_rev` 绑定，回滚后须确认二者一致，否则判定会被拒绝。
-
----
-
-## 六、部署后核对清单
-
-| 项 | 命令 | 通过判据 |
-|---|---|---|
-| 自检 | `python tools/check_all.py` | 未通过 0 |
-| 依赖 | `python tools/check_deps.py` | 零第三方依赖，三处声明一致 |
-| 题库完整 | `python -m mprobe bank info` | 显示预期的 `bank_rev` 与题数 |
-| 端点可用 | `python -m mprobe config list` | 目标端点密钥为 `✓` |
-| 连通与档位 | `python -m mprobe eval --model X --tier monitor --dry-run` | 无「渠道不通」，且能读出最小可检出退化与费用 |
-| 基线就绪 | `python -m mprobe baseline --model X --tier monitor --json` | 返回基线且 `provisional` 为 false |
-| 判定可执行 | `python -m mprobe check --model X --tier monitor --dry-run` | 不报「选不出足够的题」 |
-| 定时任务 | `python -m mprobe schedule status --json` | `exists` 为 true |
-| 清单一致 | `python tools/inventory.py` | 代码、题库、端点、产物与预期一致 |
-
----
-
-## 七、部署期常见问题
-
-运行期的排错见 [`GUIDE.md`](GUIDE.md) 第五节。以下为部署阶段特有的：
-
-| 症状 | 原因与处置 |
-|---|---|
-| `pip install -e .` 报 `BackendUnavailable` | 缺 setuptools。`pip install -r requirements-dev.txt` |
-| `找不到端点配置` | `config/models/` 下无对应 json，或文件名与 `--model` 参数不一致（参数取文件名，不含扩展名） |
-| 在其他目录执行 `mprobe` 报找不到 `banks/` | 预期行为。须在仓库根执行 |
-| `题库校验失败，拒绝运行` | 预期行为。本机修改一个字节即导致该机分数与他机不可比。若确需改题，改题库并升版本号 |
-| 定时任务未执行 | 依次核对：`schedule status` 的 `exists`、命令中是否有 `--yes`、密钥是否为用户级 |
-| 构建期脚本报找不到数据 | 需以 `--source` / `--archive` 指定外部数据路径。其产物已随仓库发布，部署时不需要它们 |
+> 不要删 `data/` 目录。
