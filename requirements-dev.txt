@@ -1,0 +1,10 @@
+# 仅「安装为包」这一条可选路径需要的构建期依赖。
+# 直接运行（python -m mprobe）不需要本文件。
+#
+#   pip install -r requirements-dev.txt
+#   pip install -e .
+#
+# Python 3.12 起标准发行版不再随附 setuptools，缺失时
+# `pip install -e .` 报 BackendUnavailable。
+# setuptools 不参与运行，故与运行时零依赖的约束不冲突。
+setuptools>=64

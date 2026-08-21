@@ -1,0 +1,68 @@
+:root {
+  --bg: #0f1115; --panel: #171a21; --line: #262b36;
+  --fg: #e6e8ee; --dim: #9aa3b2;
+  --ok: #4ec9a0; --watch: #e0b84c; --alert: #e06c6c; --unknown: #6b7280;
+  --accent: #6ea8fe;
+  --grid: #3a4150; --track: #262b36;
+}
+@media (prefers-color-scheme: light) {
+  /* 浅色主题下也要重定义图表颜色 —— 早先 SVG 里写死了深色系的
+     网格线和坐标文字，在白底上几乎看不见。*/
+  :root { --bg:#f7f8fa; --panel:#fff; --line:#e2e5ea; --fg:#1a1d23; --dim:#5b6472;
+          --grid:#c9cfd8; --track:#e6e9ee; --accent:#2563eb;
+          --ok:#0f9d6e; --watch:#b8860b; --alert:#c53030; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 14px/1.6 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px; border-bottom: 1px solid var(--line);
+}
+h1 { font-size: 18px; margin: 0; letter-spacing: .5px; }
+h2 { font-size: 15px; margin: 22px 0 10px; color: var(--fg); }
+.pill {
+  font-size: 12px; padding: 2px 9px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--dim);
+}
+.pill.warn { color: var(--watch); border-color: var(--watch); }
+nav { display: flex; gap: 4px; padding: 10px 20px 0; }
+nav button {
+  background: none; border: 1px solid transparent; color: var(--dim);
+  padding: 7px 14px; border-radius: 8px 8px 0 0; cursor: pointer;
+  font-size: 14px;
+}
+nav button.on { color: var(--fg); background: var(--panel); border-color: var(--line); border-bottom-color: var(--panel); }
+main { padding: 0 20px 60px; }
+.tab { display: none; }
+.tab.on { display: block; }
+.note { color: var(--dim); font-size: 13px; margin: 4px 0 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+th { color: var(--dim); font-weight: 500; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+.state { font-weight: 600; }
+.state.normal { color: var(--ok); }
+.state.watch { color: var(--watch); }
+.state.alert { color: var(--alert); }
+.state.unknown { color: var(--unknown); }
+a, .link { color: var(--accent); cursor: pointer; text-decoration: none; }
+a:hover, .link:hover { text-decoration: underline; }
+code { background: rgba(127,127,127,.14); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+svg { display: block; max-width: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--dim); margin-top: 6px; }
+.sep-label { font-size: 10px; fill: var(--watch); }
+.hint { font-size: 12px; color: var(--dim); }
+.bad { color: var(--alert); }
+.good { color: var(--ok); }
+pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 12px; }
+
+/* 右上角的刷新与自动刷新 */
+.bar { display:flex; align-items:center; gap:10px; margin-left:auto; font-size:12px; color:var(--dim); }
+.bar button { background:var(--panel); border:1px solid var(--line); color:var(--fg);
+  border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px; }
+.bar button:hover { border-color:var(--accent); }
+.empty { color:var(--dim); padding:18px; text-align:center; border:1px dashed var(--line); border-radius:8px; }

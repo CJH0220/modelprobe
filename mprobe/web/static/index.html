@@ -1,0 +1,61 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>mprobe · 模型能力观测</title>
+<link rel="stylesheet" href="/style.css">
+<body>
+<header>
+  <h1>mprobe</h1>
+  <span id="rev" class="pill">题库 …</span>
+  <span class="pill warn">只读界面 · 只绑 127.0.0.1</span>
+</header>
+
+<nav id="tabs">
+  <button data-tab="overview" class="on">总览</button>
+  <button data-tab="run">单轮</button>
+  <button data-tab="monitor">监控</button>
+  <button data-tab="models">端点</button>
+  <button data-tab="bank">题库</button>
+</nav>
+
+<main>
+  <section id="overview" class="tab on">
+    <h2>判定三态</h2>
+    <div id="states"></div>
+    <h2>趋势</h2>
+    <p class="note" id="ov-note"></p>
+    <div id="charts"></div>
+    <h2>最近轮次</h2>
+    <div id="runs"></div>
+  </section>
+
+  <section id="run" class="tab">
+    <h2>单轮结果</h2>
+    <p class="note">从「总览」里点一个 run_id 进来。</p>
+    <div id="run-body"></div>
+  </section>
+
+  <section id="monitor" class="tab">
+    <h2>基线</h2>
+    <div id="baselines"></div>
+    <h2>判定历史</h2>
+    <div id="checks"></div>
+    <h2>推送</h2>
+    <div id="notify"></div>
+  </section>
+
+  <section id="models" class="tab">
+    <h2>端点</h2>
+    <p class="note">界面**永不显示密钥明文**，只显示掩码与来源。</p>
+    <div id="endpoints"></div>
+  </section>
+
+  <section id="bank" class="tab">
+    <h2>题库</h2>
+    <div id="bank-body"></div>
+    <h2>档位</h2>
+    <div id="tiers-body"></div>
+  </section>
+</main>
+
+<script src="/app.js"></script>
+</body>

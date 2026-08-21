@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mprobe"
+version = "1.0.0"
+description = "模型能力观测与静默退化监测工具（题库冻结、结论自带边界、零第三方依赖）"
+readme = "README.md"
+requires-python = ">=3.9"
+
+# 运行时**零第三方依赖**，这是刻意的约束而非尚未添加：
+#   · 一个用来判断「模型是不是变差了」的工具，自身不应引入会变的依赖；
+#   · 装在客户机器上要能立刻跑，不为一个诊断工具准备虚拟环境；
+#   · 依赖升级会改变判分行为，而判分行为变更等同于改题（见 MEASUREMENT.md 铁律六）。
+# 若将来必须引入依赖，需同时给出「该依赖升级是否会改变判分结果」的论证。
+dependencies = []
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Documentation = "./GUIDE.md"
+
+[project.scripts]
+# 安装后可直接用 `mprobe`，等价于 `python -m mprobe`
+mprobe = "mprobe.cli:main"
+
+[tool.setuptools]
+# 只打包 Python 包本身。题库、档案、配置**不进 wheel**：
+# 它们是需要随版本审阅与冻结的数据，走仓库分发而非包分发。
+# 详见 DEPLOY.md「为什么不做 pip 分发」。
+packages = [
+    "mprobe",
+    "mprobe.engine",
+    "mprobe.monitor",
+    "mprobe.store",
+    "mprobe.mcp",
+    "mprobe.web",
+]
+
+[tool.setuptools.package-data]
+"mprobe.web" = ["static/*"]

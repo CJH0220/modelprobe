@@ -1,0 +1,17 @@
+{
+  "tier": "probe",
+  "label": "全量探针 · 测题不测模型",
+  "purpose": "跑全部题目，计算每题通过率与跨模型极差，用于题库定版。只能 eval，不产基线。",
+  "cadence": "adhoc",
+  "trials": 3,
+  "target_items": 253,
+  "baseline_rounds": 0,
+  "banks": [
+    "core.jsonl",
+    "public_v1.jsonl"
+  ],
+  "select": {
+    "mode": "all"
+  },
+  "note": "本档产物是**题目的台账**，非模型的分数：用于计算每题通过率与跨模型极差，供题库定版。含判分器黑名单题（该类题可用于测评，不可用于监控）。全库 253 道 x 3 次 = 759 次请求。"
+}

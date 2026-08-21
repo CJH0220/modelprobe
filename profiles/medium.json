@@ -1,0 +1,15 @@
+{
+  "tier": "medium",
+  "label": "中档 · 周度体检",
+  "purpose": "每周一次。总分可下三态判定，M 维可单独判定，其余维只看趋势。",
+  "cadence": "weekly",
+  "trials": 3,
+  "target_items": 50,
+  "baseline_rounds": 1,
+  "banks": ["core.jsonl", "public_v1.jsonl"],
+  "select": {
+    "mode": "quota",
+    "quota": {"S": 2, "M": 12, "L": 6, "K": 6, "C": 6, "KN": 6, "MA": 6, "IF": 6}
+  },
+  "note": "八个维度，除 S 外每维 >= 6 道，所以都能显示。M 给到 12 道是唯一能单独下判定的维（T = 53.50/sqrt(12) = 15.4 分）。计分 48 道 / 144 请求，最小可检出退化约 7.7 分。"
+}

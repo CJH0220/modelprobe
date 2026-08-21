@@ -1,0 +1,44 @@
+{
+  "_note": [
+    "价格只在这里改，eval 和 check 永远不联网取价——测评过程中去拉一个可能挂掉的",
+    "页面，会让本来能跑完的一轮直接失败。",
+    "单位是每百万 token 的价格。currency 只是标签，不做汇率换算。",
+    "实测口径优于标价：同一个模型走公司网关和走官方直连，账单可能差好几倍。",
+    "deepseek 官方已公告高峰时段 2 倍计费，下表是平峰价，不含该倍率——",
+    "所以高峰跑出来的实际账单可能是估算的两倍。"
+  ],
+  "updated_at": "2026-08-20",
+  "source": "手工维护；V4 系列价格取自官方定价页报道（2026-08）",
+  "models": {
+    "deepseek-v4-flash": {
+      "input_per_mtok": 1.0,
+      "output_per_mtok": 2.0,
+      "cached_input_per_mtok": 0.02,
+      "currency": "CNY"
+    },
+    "deepseek-v4-pro": {
+      "input_per_mtok": 3.0,
+      "output_per_mtok": 6.0,
+      "cached_input_per_mtok": 0.025,
+      "currency": "CNY"
+    },
+    "deepseek-chat": {
+      "input_per_mtok": 2.0,
+      "output_per_mtok": 8.0,
+      "cached_input_per_mtok": 0.5,
+      "currency": "CNY"
+    }
+  },
+  "fx": {
+    "CNY": 1.0,
+    "USD": 7.2,
+    "EUR": 7.8
+  },
+  "_fx_note": [
+    "汇率表：1 单位该币种折合多少 CNY（本位币）。**手工维护，永不联网取**——",
+    "测评过程中去拉一个可能挂掉的汇率接口，会让本来能跑完的一轮直接失败。",
+    "存在的理由：三个端点分别记 CNY / CNY / USD，而 currency 此前只是个标签，",
+    "跨模型汇总只能手算。而成本闸门就是靠这个数决定要不要拦人的。",
+    "折算值在输出里一律带上汇率和来源，读的人才能判断它是什么时候的价。"
+  ]
+}

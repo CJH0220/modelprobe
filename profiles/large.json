@@ -1,0 +1,17 @@
+{
+  "tier": "large",
+  "label": "大档 · 月度定量",
+  "purpose": "每月一次。唯一可以写进跨版本对比结论的档位（须取保守分）。",
+  "cadence": "monthly",
+  "trials": 3,
+  "target_items": 120,
+  "baseline_rounds": 1,
+  "banks": ["core.jsonl", "public_v1.jsonl"],
+  "select": {
+    "mode": "quota",
+    "quota": {"S": 1, "M": 12, "KN": 12, "MA": 12, "IF": 12, "DA": 12, "RS": 12,
+              "K": 11, "C": 9, "L": 6,
+              "A": 4, "P": 4, "D": 3, "H": 3, "B": 2, "J": 2, "LG": 1, "O": 1, "E": 1}
+  },
+  "note": "六个维度 >= 12 道可单独判定（M 行为 + KN/MA/IF/DA/RS 能力）；K/C/L 只看趋势；A/P/D/H/B/J/LG/O/E 题数不足不显示分数，但计入总分。不含 LA 语言——那 30 道 connections 题判据是 16 词定序正则，全部在判分器黑名单，只能用 --dim LA 单独跑测评。计分 119 道 / 357 请求，最小可检出退化约 4.9 分。"
+}

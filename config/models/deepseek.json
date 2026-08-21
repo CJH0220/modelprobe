@@ -1,0 +1,33 @@
+{
+  "label": "DeepSeek 官方 · V4 Flash",
+  "default": true,
+  "note": "DeepSeek 官方端点。密钥取自环境变量 DEEPSEEK_API_KEY，不写入本文件。max_tokens 设为 32000：该模型为推理型，实测约 95% 的输出 token 消耗于推理过程；取值 16000 时出现大量截断，且多数截断请求的可见输出为 0 字符。截断导致的 0 分属配额问题而非能力问题，会使题目被误判为过难。",
+  "model": {
+    "api_style": "openai",
+    "base_url": "https://api.deepseek.com",
+    "model": "deepseek-v4-flash",
+    "api_key_env": "DEEPSEEK_API_KEY",
+    "proxy": "auto",
+    "temperature": 0.0,
+    "max_tokens": 32000,
+    "timeout": 300,
+    "system": "",
+    "extra_headers": {},
+    "extra_body": {}
+  },
+  "run": {
+    "trials": 3,
+    "concurrency": 4,
+    "retries": 3,
+    "retry_backoff": 2.0,
+    "qps": 0,
+    "max_retry_wait": 120,
+    "fail_score": 0.0
+  },
+  "pricing": {
+    "input_per_mtok": 1.0,
+    "output_per_mtok": 2.0,
+    "cached_input_per_mtok": 0.02,
+    "currency": "CNY"
+  }
+}

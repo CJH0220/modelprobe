@@ -1,0 +1,14 @@
+# mprobe 运行时依赖
+#
+# 本文件**故意为空**：mprobe 的运行时只使用 Python 标准库。
+# 保留此文件是为了让 `pip install -r requirements.txt` 成为一条
+# 有确定结果的命令，而不是一条需要先判断「要不要装」的命令。
+#
+#   pip install -r requirements.txt      # 不装任何包，正常退出
+#
+# 为什么是零依赖：本工具的输出用于判断线上端点是否退化。
+# 依赖树中任何一个包的版本变动都可能改变数值结果，而这种变动
+# 不会体现在 bank_rev 上，因此不可比性无法被检测到。
+# 由 tools/check_deps.py 强制：出现第三方 import 且未登记在本文件中即失败。
+#
+# 需要的 Python 版本：>= 3.9（在 pyproject.toml 中声明）。

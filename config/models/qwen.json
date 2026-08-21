@@ -1,0 +1,33 @@
+{
+  "label": "qwen",
+  "default": false,
+  "note": "阿里 dashscope 的 qwen3.6-flash。1.4 的第二个模型。max_tokens 抬到 32000 与 deepseek 对齐——跨模型比较必须同配额，否则截断率不同就成了变量污染。 timeout 从 120 抬到 300s 与 deepseek 对齐：校准时 AIME25-004 在 120s 超时失败，而超时造成的缺失和答错在记账上无法区分。",
+  "model": {
+    "api_style": "openai",
+    "temperature": 0.0,
+    "max_tokens": 32000,
+    "timeout": 300,
+    "system": "",
+    "extra_headers": {},
+    "extra_body": {},
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "model": "qwen3.6-flash",
+    "api_key_env": "DASHSCOPE_API_KEY",
+    "proxy": "auto"
+  },
+  "run": {
+    "trials": 3,
+    "concurrency": 4,
+    "retries": 3,
+    "retry_backoff": 2.0,
+    "qps": 0,
+    "fail_score": 0.0
+  },
+  "pricing": {
+    "input_per_mtok": 1.2,
+    "output_per_mtok": 7.2,
+    "cached_input_per_mtok": 0.6,
+    "currency": "CNY",
+    "ref_cost_per_item": null
+  }
+}

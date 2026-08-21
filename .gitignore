@@ -1,0 +1,16 @@
+# 运行产物：每一轮的原始回答、报告、进度、结果库。
+# 不进版本管理——里面有模型的完整输出，体积大且天天变，
+# 而且 data/mprobe.db 是二进制，合并冲突无法解决。
+data/
+
+# 密钥。config/models/*.json 是要提交的（端点定义），
+# 密钥只走环境变量或这个文件，两者都不进库。
+config/secrets.local.json
+config/secrets.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+_dev_archive/

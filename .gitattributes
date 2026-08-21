@@ -1,0 +1,7 @@
+# 统一以 LF 入库。题库为 JSON Lines，行尾一旦被改写，
+# sha256 校验即失败并拒绝运行 —— 故必须显式固定。
+* text=auto eol=lf
+*.jsonl text eol=lf
+*.json  text eol=lf
+*.png binary
+*.jpg binary
