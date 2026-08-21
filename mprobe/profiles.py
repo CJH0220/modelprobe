@@ -116,12 +116,12 @@ def plan(prof, items, monitor_only=False):
         raise ProfileError(
             "档位 %s 在**监控口径**下选不出足够的题：设计 %s 道，实际 %d 道。\n"
             "  %s\n"
-            "原因是通过监控准入（判分器不黑 + 信噪比实测 >= 3）的题不够。\n"
-            "现在能进监控的题只有 实施计划第 1.1 项 从历史存档里验证过的那几道；\n"
-            "其余题目的 snr 是 untested —— 「没测过」不能当「合格」用。\n"
-            "要让监控可用，先跑 实施计划第 1.3 项 / 1.4 把信噪比测出来：\n"
-            "  python -m mprobe eval --model deepseek --tier large --all-items\n"
-            "测评不受这道闸门约束：`eval` 默认用全部题，可以照常跑。"
+            "原因是监控池（判分器不在黑名单，且不是已实测 SD 超标）"
+            "在这些维度上题不够。\n"
+            "看每个维度有多少题：python -m mprobe bank info\n"
+            "监控请改用 --tier monitor —— 它的配额就是按池子的"
+            "实际题数定的。\n"
+            "测评不受这道闸门约束：`eval` 用全部题，可以照常跑。"
             % (prof.get("tier"), target, n_items,
                "；".join(sel.get("short") or ["配额本身为空"])))
     n_req = n_items * prof["trials"]
@@ -158,7 +158,8 @@ def plan(prof, items, monitor_only=False):
         "min_detectable": tiers.min_detectable(n_scored_req),
         "ci_half": tiers.ci_half(n_scored_req),
         "dim_counts": dim_counts,
-        "dim_display": {d: tiers.dim_display(m) for d, m in dim_counts.items()},
+        "dim_display": {d: tiers.dim_display(m, prof["trials"])
+                        for d, m in dim_counts.items()},
         "selection": sel,
         "warnings": warn,
         "cadence": prof.get("cadence"),

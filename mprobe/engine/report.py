@@ -132,6 +132,15 @@ def conclusion_card(ctx, quant, dim_rows, health=None, verdict=None):
                     % (max(0.0, quant - ci), min(100.0, quant + ci)))
     read.append("本档（%s，%d 次请求）的最小可检出退化是 **%.1f 分**"
                 % (tier, n_req, md))
+    # 监控池允许 SD 未实测的题进来，换取维度覆盖。这一步的代价是
+    # 假告警率没有测量约束 —— 不写出来，读者会以为阈值的可靠性
+    # 和已实测的题一样。
+    n_unm = ctx.get("sd_unmeasured") or 0
+    if ctx.get("monitor_only") and n_unm:
+        read.append("选中的 %d 道题里有 **%d 道轮间 SD 未实测**，"
+                    "这部分题的假告警率没有测量约束；"
+                    "实际波动由基线的 σ 反映（σ 取实测与理论的较大者）"
+                    % (n_items, n_unm))
     if health and health["verdict"] == "unusable":
         read.append("**本轮结果不可用**：" + health["note"])
     elif health and health["verdict"] == "degraded":
@@ -218,17 +227,18 @@ def _header(ctx, skipped):
     return L
 
 
-def _dim_section(L, dim_rows):
+def _dim_section(L, dim_rows, trials=3):
     L += ["", "## 一、各维度得分", "",
-          "| 维度 | 题数 | 得分 | 95% 区间 | 阈值 ±T | pass^3 | 采样极差 | 权重 |",
+          "| 维度 | 题数 | 得分 | 95%% 区间 | 阈值 ±T | pass^%d | 采样极差 | 权重 |"
+          % trials,
           "|---|---:|---:|:---:|---:|---:|---:|---:|"]
     hidden = []
     for d in sorted(dim_rows.values(), key=lambda x: x["dim"]):
-        show, style, _why = tiers.dim_display(d["n_items"])
+        show, style, _why = tiers.dim_display(d["n_items"], trials)
         if not show:
             hidden.append("%s(%d题)" % (dims.label(d["dim"]), d["n_items"]))
             continue
-        t = tiers.dim_threshold(d["n_items"])
+        t = tiers.dim_threshold(d["n_items"], trials)
         mark = "" if style == "solid" else " ~"
         L.append("| %s%s | %d | %s | %s ~ %s | %.1f | %s | %s | %.1f |" % (
             dims.label(d["dim"]), mark, d["n_items"], _pct(d["score"]),
@@ -392,7 +402,7 @@ def _report(outdir, ctx, item_rows, dim_rows, quant, calib, runtime,
             skipped, agg, cost_stats, health):
     L = _header(ctx, skipped)
     L += [""] + render_card(conclusion_card(ctx, quant, dim_rows, health))
-    _dim_section(L, dim_rows)
+    _dim_section(L, dim_rows, ctx.get("trials") or 3)
     _item_section(L, item_rows)
     _runtime_section(L, runtime, health)
     _calib_section(L, calib)

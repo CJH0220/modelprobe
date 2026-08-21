@@ -30,6 +30,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 
+from mprobe import BANK_REV       # noqa: E402  —— 必须在 sys.path 之后
+
 PY = sys.executable or "python"
 OK, BAD = [], []
 
@@ -346,14 +348,21 @@ def g_card():
         if os.path.isfile(paths.DB):
             con = db.connect(paths.DB)
             rows = list(con.execute(
-                "select tier, detail from baselines where active = 1"))
+                # 只比**当前 bank_rev** 的基线：旧题库版本下的基线
+                # 每轮请求数本来就不同，那不是不一致，是换了版本。
+                "select tier, detail from baselines where active = 1"
+                " and bank_rev = ?", (BANK_REV,)))
             off = []
             for tier, detail in rows:
                 d = json.loads(detail or "{}")
                 n = d.get("requests_per_round")
                 try:
                     from mprobe import profiles
-                    exp = profiles.resolve(tier)["scored_requests"]
+                    # 基线一律由 baseline --build 产出，那条路径必过
+                    # 监控准入过滤，所以这里也要带 monitor_only=True，
+                    # 否则比的是「全库选题」而不是基线实际用的题。
+                    exp = profiles.resolve(
+                        tier, monitor_only=True)["scored_requests"]
                 except Exception:
                     continue
                 if n and n != exp:

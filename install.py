@@ -287,13 +287,181 @@ def check_endpoints(log):
 
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# 5. 卸载
+# --------------------------------------------------------------------------
+#
+# 只删**本脚本装的东西**，且只在它没被人动过时才删。判据是「与本仓库
+# 当前内容一致」：MCP 条目的 cwd 指向本仓库；Skill 文件与 skills/ 下
+# 一字不差；Codex 段落带着本脚本追加时写下的注释标记。
+# 不满足就跳过并说明原因，不猜。
+
+
+def _rm(path, apply, log, why=""):
+    if not os.path.exists(path):
+        log.append("  = %s 不存在，跳过" % path)
+        return False
+    if not apply:
+        log.append("  → 将删除 %s%s" % (path, ("（%s）" % why) if why else ""))
+        return True
+    if os.path.isdir(path):
+        shutil.rmtree(path)
+    else:
+        os.remove(path)
+    log.append("  ✓ 已删除 %s" % path)
+    return True
+
+
+def uninstall_claude_mcp(apply, log):
+    path = CLAUDE_JSON
+    old = _read(path)
+    if not old:
+        log.append("  = %s 不存在，跳过" % path)
+        return False
+    try:
+        cfg = json.loads(old)
+    except json.JSONDecodeError:
+        log.append("  ✗ %s 不是合法 JSON，**不动它**" % path)
+        return False
+    servers = (cfg or {}).get("mcpServers") or {}
+    cur = servers.get(SERVER_NAME)
+    if cur is None:
+        log.append("  = Claude Code 里没有 %s，跳过" % SERVER_NAME)
+        return False
+    if (cur or {}).get("cwd") != ROOT:
+        log.append("  ! Claude Code 里的 %s 指向 %s，不是本仓库，**不动它**"
+                   % (SERVER_NAME, (cur or {}).get("cwd")))
+        return False
+    del servers[SERVER_NAME]
+    return _write(path,
+                  json.dumps(cfg, ensure_ascii=False, indent=2) + "\n",
+                  apply, log)
+
+
+def uninstall_codex_mcp(apply, log):
+    path = CODEX_TOML
+    old = _read(path)
+    if not old:
+        log.append("  = %s 不存在，跳过" % path)
+        return False
+    marker = "# mprobe —— 模型能力观测工具（由 install.py 追加）"
+    if marker not in old:
+        if ("[mcp_servers.%s]" % SERVER_NAME) in old:
+            log.append("  ! %s 里有 mprobe 段，但没有本脚本的标记，"
+                       "**不动它**。请手动删除该段。" % path)
+        else:
+            log.append("  = Codex 里没有 mprobe 段，跳过")
+        return False
+    lines = old.splitlines(True)
+    i = next(k for k, ln in enumerate(lines) if ln.strip() == marker)
+    # 从标记行删到**下一个**段头（不含），段头本身留给别人
+    j = i + 1
+    while j < len(lines):
+        if lines[j].lstrip().startswith("[") and j > i + 1:
+            break
+        j += 1
+    block = "".join(lines[i:j])
+    # 和 Claude 那支同一条判据：cwd 不指向本仓库就是别处的另一份安装。
+    # 少了这一步会删掉别人的配置 —— 标记只能证明「是本脚本写的」，
+    # 不能证明「是这个仓库写的」。
+    if json.dumps(ROOT) not in block:
+        log.append("  ! Codex 里的 mprobe 段不指向本仓库，**不动它**")
+        return False
+    return _write(path, "".join(lines[:i] + lines[j:]), apply, log)
+
+
+def uninstall_skills(apply, log):
+    src_root = os.path.join(ROOT, "skills")
+    names = sorted(os.listdir(src_root)) if os.path.isdir(src_root) else []
+    changed = False
+    for name in names:
+        src = os.path.join(src_root, name, "SKILL.md")
+        if not os.path.isfile(src):
+            continue
+        dst_dir = os.path.join(CLAUDE_SKILLS, name)
+        dst = os.path.join(dst_dir, "SKILL.md")
+        cur = _read(dst)
+        if cur is None:
+            log.append("  = %s 没装，跳过" % name)
+            continue
+        if cur != _read(src):
+            log.append("  ! %s 与本仓库的不一致（你可能改过触发词），"
+                       "**不删**：%s" % (name, dst))
+            continue
+        _backup(dst)
+        changed = _rm(dst_dir, apply, log, "与仓库一致") or changed
+    return changed
+
+
+def uninstall_schedule(log):
+    """计划任务不由本脚本装，只列现状并给出该跑的命令。"""
+    r = subprocess.run([PY, "-m", "mprobe", "schedule", "list", "--json"],
+                       cwd=ROOT, capture_output=True, text=True,
+                       encoding="utf-8", errors="replace")
+    try:
+        data = json.loads(r.stdout or "{}")
+    except json.JSONDecodeError:
+        log.append("  ? 读不到计划任务状态。手动查：mprobe schedule list")
+        return
+    rows = data.get("tasks") or data.get("schedules") or []
+    live = [t for t in rows if isinstance(t, dict) and t.get("exists")]
+    if not live:
+        log.append("  = 没有已安装的计划任务")
+        return
+    for t in live:
+        log.append("  ! 计划任务 %s 还在。删它："
+                   "python -m mprobe schedule remove --model %s --tier %s"
+                   % (t.get("name"), t.get("model") or "<端点>",
+                      t.get("tier") or "<档位>"))
+
+
+def do_uninstall(args):
+    print("mprobe 卸载 —— 根目录 %s" % ROOT)
+    print("模式：%s\n" % ("**真删**" if args.apply
+                           else "预演（不改任何文件）"))
+    log = []
+    print("[1/4] MCP 配置")
+    if args.host in ("claude", "both"):
+        uninstall_claude_mcp(args.apply, log)
+    if args.host in ("codex", "both"):
+        uninstall_codex_mcp(args.apply, log)
+    _flush(log)
+
+    print("\n[2/4] Skill")
+    uninstall_skills(args.apply, log)
+    _flush(log)
+
+    print("\n[3/4] 计划任务")
+    uninstall_schedule(log)
+    _flush(log)
+
+    print("\n[4/4] 仓库内的东西（本脚本**不动**，要删自己删）")
+    for pth, what in ((os.path.join(ROOT, "data"), "全部测评结果与响应原文"),
+                      (os.path.join(ROOT, "config", "secrets.local.json"),
+                       "密钥")):
+        print("  · %s —— %s%s"
+              % (pth, what, "" if os.path.exists(pth) else "（不存在）"))
+    print("  · 仓库目录本身 —— 直接删掉即可，工具不往别处写文件")
+
+    if not args.apply:
+        print("\n以上都没有真的删。确认无误后加 --apply 再跑一次。")
+    else:
+        print("\n卸载完成。改动过的文件旁边留有 .bak 备份。")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true",
                     help="真的写文件。不加只打印将要做什么")
     ap.add_argument("--host", choices=["claude", "codex", "both"],
                     default="both")
+    ap.add_argument("--uninstall", action="store_true",
+                    help="卸载：删掉本脚本装的 MCP 配置与 Skill")
     args = ap.parse_args()
+
+    if args.uninstall:
+        return do_uninstall(args)
 
     log = []
     print("mprobe 安装 —— 根目录 %s" % ROOT)

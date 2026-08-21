@@ -17,7 +17,7 @@
 ```bash
 git clone https://github.com/CJH0220/modelprobe.git
 cd modelprobe
-git checkout v1.0.0
+git checkout v1.1.0
 python tools/check_all.py
 ```
 
@@ -31,13 +31,14 @@ python tools/check_all.py
 python -m mprobe config list
 ```
 
-要测的那一行前面是 `✓` 就行。若是 `!`（密钥缺失），执行：
+要测的那一行前面是 `✓` 就行。若密钥那列写「未设置」，执行：
 
-```powershell
-[Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY","你的密钥","User")
+```bash
+python -m mprobe config key --model deepseek
 ```
 
-设完**关掉这个终端重新开一个**，再回到第 2 步确认。
+输入时不回显，存进 `config/secrets.local.json`（不进版本管理）。
+不用关终端重开，计划任务也读得到。填完再跑一次第 2 步确认。
 
 ### 第 3 步：看这次要花多少钱
 
@@ -53,11 +54,9 @@ python -m mprobe eval --model deepseek --tier monitor --dry-run
 python -m mprobe eval --model deepseek --tier monitor --yes
 ```
 
-约 1 分钟、0.06 元。跑完看两处：
+约 13 分钟、0.19 元。跑完打开 `data/runs/<run_id>/report.md`，看两处：
 
-报告在 `data/runs/<run_id>/report.md`，打开看两处：
-
-- `- 请求成功 42/42，失败率 0.0%` —— 失败率高这轮不算
+- `- 请求成功 119/119，失败率 0.0%` —— 失败率高这轮不算
 - `| 输出被截断 | 0（其中 0 次完全没有可见内容） |` —— 不是 0 说明 `max_tokens` 不够，见第五节
 
 ### 第 5 步：再跑 4 轮（凑够 5 轮才能建基线）
@@ -133,16 +132,17 @@ python -m mprobe web
 python -m mprobe tiers
 ```
 
-| 档位 | 花费 | 耗时 | 能发现多大的退化 |
-|---|---:|---:|---|
-| `monitor` | 0.06 元 | 1 分 | 15.4 分以上 |
-| `small` | 0.09 元 | 5 分 | 12.6 分以上 |
-| `medium` | 0.23 元 | 7 分 | 7.7 分以上 |
-| `large` | 0.57 元 | 18 分 | 4.9 分以上 |
-| `probe` | 1.23 元 | 2.0 时 | 3.6 分以上 |
+| 档位 | 每题跑几次 | 花费 | 耗时 | 能发现多大的退化 |
+|---|---:|---:|---:|---|
+| `monitor` | 1 | 0.19 元 | 13 分 | 8.6 分以上 |
+| `small` | 3 | 0.09 元 | 5 分 | 12.6 分以上 |
+| `medium` | 3 | 0.23 元 | 7 分 | 7.7 分以上 |
+| `large` | 3 | 0.57 元 | 18 分 | 4.9 分以上 |
+| `probe` | 3 | 1.23 元 | 2.0 时 | 3.6 分以上 |
 
-花费与耗时为 deepseek 端点的 `--dry-run` 估值，换端点即变，
-**跑一次 `--dry-run` 看你自己的数**。最后一列只取决于档位，不随端点变。
+花费为 `--dry-run` 估值，耗时为实测。**第一次跑某个档位时 `--dry-run`
+的耗时会偏低**（它要靠本机历史实测数据推算，还没有就只能按理论算），
+跑过一轮之后就准了。最后一列只取决于档位，不随端点变。
 
 **跑长档位不要在前台等**：
 
@@ -162,6 +162,7 @@ python -m mprobe status --run run-001
 | 3 | **告警不等于模型变差。** 先按顺序排查：换渠道 → 换时段 → 看是哪些题失败 |
 | 4 | **单轮低于阈值只出「观察」**，连续两轮才告警。单轮不作数 |
 | 5 | **改了 `max_tokens`、`temperature` 或模型名，基线就作废**，要重新走第 4–6 步 |
+| 7 | **监控档每题只跑 1 次，测评档跑 3 次。** 监控池里多数题的轮间波动没实测过，报告会写出有几道，那部分的假告警率没有测量约束 |
 | 6 | **不要删 `data/` 目录。** 判分逻辑若有修订，靠它重算；删了只能重新花钱跑 |
 
 ---
@@ -174,9 +175,9 @@ python -m mprobe status --run run-001
 | 报「选不出足够的题」 | 该档位可用于监控的题不够。改用 `--tier monitor`，或跑 `python -m mprobe bank info` 看可用题数 |
 | 某个维度全是 0 分 | 先看有没有截断。有就把 `config/models/<端点>.json` 的 `max_tokens` 调大（如 16000 → 32000）后重跑 |
 | 报「题库校验失败，拒绝运行」 | 题库被改动过。这是预期行为——题库是冻结的，不要手改 |
-| 报「价格未配置」 | `config/models/<端点>.json` 缺 `pricing` 段。不知道花多少钱时工具一律拒绝执行 |
-| 密钥设了还是说缺失 | 用户级环境变量只对**新开的**终端生效。关掉终端重开 |
-| 定时任务没跑 | 依次查：`schedule status` 的 `exists`、命令里有没有 `--yes`、密钥是不是用户级 |
+| 账单写「未知（价格未配置）」 | 正常，不影响执行。要看花费就在 `config/models/<端点>.json` 补 `pricing` 段 |
+| 密钥设了还是说缺失 | 用 `python -m mprobe config key --model <端点>` 重填；若用的是环境变量，要新开终端 |
+| 定时任务没跑 | 依次查：`schedule status` 的 `exists`、命令里有没有 `--yes`、密钥在不在 `secrets.local.json` |
 | 界面打开是空的 | 查是否有旧进程占着端口，核对启动时打印的实际端口号 |
 
 ---

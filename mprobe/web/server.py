@@ -113,7 +113,8 @@ def api_run(q):
     for iid, row in (s.get("items") or {}).items():
         row["truncated"] = iid in trunc
     for d_code, row in (s.get("dims") or {}).items():
-        show, style, why = tiers.dim_display(row.get("n_items") or 0)
+        show, style, why = tiers.dim_display(row.get("n_items") or 0,
+                                            s.get("trials") or 3)
         row["display"] = {"show": show, "style": style, "why": why,
                           "name": dims.name(d_code),
                           "in_score": dims.in_score(d_code)}

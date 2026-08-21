@@ -80,7 +80,12 @@ def resolve(name):
     return None, None
 
 
-def set_key(name, key, store="session"):
+def set_key(name, key, store="file"):
+    """默认写 config/secrets.local.json。
+
+    session 只在当前进程有效，作为默认值会让人以为已经存好了，
+    下一条命令又说密钥缺失。
+    """
     if not name:
         raise ValueError("必须指定变量名")
     key = (key or "").strip()

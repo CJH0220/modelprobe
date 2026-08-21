@@ -71,12 +71,16 @@ TIERS = {
     "monitor": {
         "key": "monitor",
         "label": "监控档",
-        "items": 14,
-        "trials": 3,
+        "items": 119,
+        # 日常监控每题只跑 1 次。题量换分辨率：117 道计分题 x 1 次的
+        # 计分请求数是 12 道 x 3 次的九倍多，最小可检出退化从 15.4 分
+        # 降到约 8.6 分，且覆盖 19 个维度而非 4 个。
+        "trials": 1,
         "banks": ["core.jsonl", "public_v1.jsonl"],
         "cadence": "daily",
-        "purpose": ("日频哨兵，只用通过监控准入的题。题量由准入结果反推，"
-                    "不是设计值 —— 全库只有 35 道过闸门，其中 23 道不计分。"),
+        "purpose": ("日频哨兵，每题 1 次。按维度配额选题，覆盖 19 个维度；"
+                    "其中多数题的轮间 SD 未实测，假告警率无测量约束，"
+                    "该题数在报告与结论卡中写出。"),
         "baseline_rounds": 5,
     },
     "probe": {
@@ -144,9 +148,15 @@ DIM_HIDE = 6        # m < 6：不展示，只在题库页列出
 DIM_DASHED = 12     # 6 <= m < 12：画虚线，标注最小可检出
 
 
-def dim_display(n_items):
-    """返回 (是否展示, 线型, 一句话说明)。"""
-    t = dim_threshold(n_items)
+def dim_display(n_items, trials=3):
+    """返回 (是否展示, 线型, 一句话说明)。
+
+    trials 必须传真实的采样次数：阈值是 2*sigma/sqrt(m*trials)，
+    每题只跑 1 次时单题得分是 0/1，比 3 次的均值抖得多。
+    用默认值 3 去读一轮 1 次采样的结果，阈值会低估 sqrt(3) 倍，
+    于是维度级的「显著下降」频繁误报。
+    """
+    t = dim_threshold(n_items, trials)
     if n_items < DIM_HIDE:
         return False, "none", ("m=%d，最小可检出 %.1f 分——比多数模型之间的"
                                "真实差距还大，画出来只是噪声" % (n_items, t))

@@ -196,9 +196,15 @@ def load(banks_dir, files, ids=None, dim_filter=None, assets=None,
                 raise BankError(
                     "题 %s 不在清单台账里，无法判断它能不能进监控。"
                     "请重新冻结题库（mprobe bank freeze）。" % it["id"])
-            if not entry.get("monitor_ok"):
-                skipped.append((it["id"], "监控稳健性过滤：%s"
-                                % (entry.get("reason") or "未标注原因")))
+            # 按 monitor_pool 筛，不是 monitor_ok —— 见 freeze() 里的说明。
+            # 旧清单没有这个字段时退回 monitor_ok，不静默放宽。
+            ok = entry.get("monitor_pool")
+            if ok is None:
+                ok = entry.get("monitor_ok")
+            if not ok:
+                skipped.append((it["id"], "监控准入过滤：%s"
+                                % (entry.get("monitor_block")
+                                   or entry.get("reason") or "未标注原因")))
                 continue
         out.append(it)
     if not out:
@@ -513,18 +519,39 @@ def freeze(banks_dir, bank_rev, files=None, notes=None, snr_ledger=None,
             sd = m.get("sd_mean_max") if m else None
             p_own = m.get("p_mean") if m else None
             row["round_sd"] = sd
+            row["sd_measured"] = m is not None
+
+            # 两级准入，分开记：
+            #
+            #   monitor_ok    已实测且轮间 SD <= 0.15 —— 假告警率有测量约束
+            #   monitor_pool  实际进监控档的范围 —— 允许 SD 未实测
+            #
+            # 只用 monitor_ok 选题时，全库仅 35 道过闸门、其中 23 道是
+            # 不计分的冒烟题，计分题只剩 12 道且集中在 4 个行为维，
+            # 能力维一道都没有。维度覆盖比单题信号质量更要紧，
+            # 故监控档按 monitor_pool 选题。
+            #
+            # 代价是明确的：未实测的题假告警率没有测量约束。
+            # 该代价不隐藏 —— 报告与结论卡须写出选中题里有几道未实测。
+            #
+            # 已实测且 SD 超标的题**仍然排除**：那是已知会抖的题，
+            # 放进来是明知故犯，与「未测过」不是一回事。
             if r == "black":
                 row["monitor_ok"] = False
+                row["monitor_pool"] = False
                 row["monitor_block"] = "判分器黑名单"
             elif m is None:
                 row["monitor_ok"] = False
+                row["monitor_pool"] = True
                 row["monitor_block"] = "轮间 SD 未实测（需同一模型多轮数据）"
             elif sd is None or sd > MONITOR_SD_MAX:
                 row["monitor_ok"] = False
+                row["monitor_pool"] = False
                 row["monitor_block"] = ("轮间 SD %.3f > %.2f，会产生假告警"
                                         % (sd or 0, MONITOR_SD_MAX))
             else:
                 row["monitor_ok"] = True
+                row["monitor_pool"] = True
                 row["monitor_why"] = "轮间 SD %.3f，稳定" % sd
 
             # 饱和是**逐模型**的属性，不进题库级闸门。
@@ -557,10 +584,12 @@ def freeze(banks_dir, bank_rev, files=None, notes=None, snr_ledger=None,
         "assets": ameta,
         "items": ledger,
         "monitor_gate": (
-            "0.1 版只过了判分器稳健性闸门。信噪比闸门（跨模型极差 / "
-            "同模型轮间 SD >= 3）尚未验证，要等 实施计划第 1.1 项 与 1.3。"
-            "现在的 monitor_ok 只代表「判分器不会自己抖」，"
-            "不代表「这道题能分辨出模型变化」。"),
+            "两级准入。monitor_ok：轮间 SD 已实测且 <= %.2f，假告警率有"
+            "测量约束。monitor_pool：监控档实际选题范围，排除判分器黑名单"
+            "与已实测 SD 超标者，但允许 SD 未实测——这类题的假告警率"
+            "没有测量约束，其题数在报告与结论卡中如实写出。"
+            "两者均不代表「这道题能分辨出模型变化」，那是测评准入"
+            "（eval_gates）的事。" % MONITOR_SD_MAX),
         "notes": notes or "",
     }
     path = os.path.join(banks_dir, "MANIFEST.json")

@@ -1,7 +1,7 @@
 # modelprobe
 
-> **版本 1.0.0 · 首个正式版本。**
-> 题库已定版（`bank_rev 1.0.0`，253 题）；MCP 服务器、三份 Claude Code Skill、
+> **版本 1.1.0。**
+> 题库 `bank_rev 1.1.0`，253 题；MCP 服务器、三份 Claude Code Skill、
 > 安装脚本、只读浏览器界面均已就位；监控闭环已在真实端点上完成
 > 采集 → 建基线 → 判定的全流程验证。
 >
@@ -29,7 +29,7 @@
 
 ```bash
 git clone https://github.com/CJH0220/modelprobe.git
-cd modelprobe && git checkout v1.0.0
+cd modelprobe && git checkout v1.1.0
 python tools/check_all.py            # 自检，零请求零成本
 ```
 
@@ -51,25 +51,26 @@ python tools/check_all.py                                          # 回归自�
 **退出码契约**：`0` 正常（含观察态）｜`1` 告警｜`2` 用法或配置错误｜`3` 结果不可用。
 计划任务据此判定告警，故该码必须原样传递至 shell。
 
-密钥不写入任何配置文件，只走用户级环境变量或 `config/secrets.local.json`：
+密钥不写入 `config/models/*.json`（那些文件进版本管理）：
 
-```powershell
-[Environment]::SetEnvironmentVariable("DEEPSEEK_API_KEY","sk-xxx","User")
+```bash
+python -m mprobe config key --model deepseek     # 不回显
 ```
 
-用户级变量仅对新开终端生效。
+存进 `config/secrets.local.json`（已 gitignore），计划任务同样读得到。
+也支持环境变量，同名时文件优先。
 
 ## 档位契约
 
 deepseek 实测值。耗时取本机同档历史实测中位数。
 
-| 档位 | 题数 | 计分请求 | 最小可检出退化 | 费用 | 耗时 |
-|---|---:|---:|---:|---:|---:|
-| `monitor` | 14 | 36 | 15.4 分 | 0.06 元 | 5 分 |
-| `small` | 20 | 54 | 12.6 分 | 0.19 元 | 16 分 |
-| `medium` | 50 | 144 | 7.7 分 | 0.48 元 | 39 分 |
-| `large` | 120 | 354 | 4.9 分 | 1.16 元 | 1.6 时 |
-| `probe` | 253 | 678 | 3.6 分 | 2.82 元 | 2.0 时 |
+| 档位 | 题数 | 次 | 请求 | 计分请求 | 最小可检出退化 | 费用 | 耗时 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `monitor` | 119 | 1 | 119 | 116 | 8.6 分 | 0.19 元 | 4 分 |
+| `small` | 20 | 3 | 60 | 54 | 12.6 分 | 0.09 元 | 5 分 |
+| `medium` | 50 | 3 | 150 | 144 | 7.7 分 | 0.23 元 | 7 分 |
+| `large` | 120 | 3 | 360 | 354 | 4.9 分 | 0.57 元 | 18 分 |
+| `probe` | 253 | 3 | 759 | 678 | 3.6 分 | 1.23 元 | 2.0 时 |
 
 **计分请求数与总请求数不同**：冒烟维与观测题不计入总分，
 故不计入 σ 的样本量。按总请求数计算会高估分辨率。

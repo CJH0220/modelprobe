@@ -205,10 +205,16 @@ def estimate(items, cfg, trials=None, out_tokens=None, tps=DEFAULT_TPS,
 
 
 def needs_confirm(est, threshold=None):
-    """要不要拦一下让人确认。价格未知时**一律拦**——
-    不知道多少钱比知道很贵更值得停一下。"""
+    """要不要拦一下让人确认。
+
+    价格未知**不再拦**：费用估算是附带功能，端点没填 pricing 时
+    照常执行，账单显示「未知」。此前一律拦停，后果是不填 pricing
+    的端点根本跑不起来。
+
+    仍然要拦的只有一种：算出来的钱超过确认线。
+    """
     if est.get("cost") is None:
-        return True, "价格未配置，无法估算花费"
+        return False, ""
     thr = threshold if threshold is not None else CONFIRM_ABOVE.get(
         est["currency"], 2.0)
     if est["cost"] > thr:

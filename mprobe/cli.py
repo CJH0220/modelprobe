@@ -159,6 +159,21 @@ def _plan(args, cfg, monitor_default=False):
     mo = getattr(args, "monitor_only", None)
     if mo is None:
         mo = monitor_default
+    # 档案可以把本档**定义**在监控池上。这样同一个 --tier 在 eval 与
+    # check 下拿到同一套题。
+    #
+    # 不这样做的后果实测过：monitor 档在 eval 下选 119 题（含 6 道判分器
+    # 黑名单题），在 check 下选另外 119 题，交集 113。而文档教的流程是
+    # 「跑 5 轮 eval 建基线 → check 判定」—— 基线和判定用的不是同一套题，
+    # 分数错位几分，且不报错。
+    #
+    # 只对声明了该字段的档位生效，`eval --tier small` 仍然不过滤。
+    try:
+        if not mo and (profiles.load(args.tier) or {}).get(
+                "monitor_pool_only"):
+            mo = True
+    except Exception:
+        pass
     try:
         plan = profiles.resolve(args.tier, monitor_only=mo)
     except (profiles.ProfileError, bankmod.BankError) as e:
@@ -181,6 +196,17 @@ def _plan(args, cfg, monitor_default=False):
                  as_json=getattr(args, "json", False))
     plan["items"] = items
     plan["n_items"] = len(items)
+    plan["monitor_only"] = bool(mo)
+
+    # 采样次数的优先级：--trials > 档案 > 端点配置。
+    #
+    # 档案要能压过端点默认值，否则「监控每题 1 次、测评每题 3 次」
+    # 无法成立 —— 端点配置里只有一个 run.trials，两个档位都会拿到它。
+    # 此前这里直接写 cfg["run"]["trials"]，档案里的 trials 只影响
+    # 档位表的估算，不影响真正发出去的请求数。
+    prof_trials = (plan.get("profile") or {}).get("trials")
+    if not getattr(args, "trials", None) and prof_trials:
+        cfg["run"]["trials"] = int(prof_trials)
     plan["trials"] = cfg["run"]["trials"]
     plan["requests"] = len(items) * cfg["run"]["trials"]
     return plan
@@ -401,6 +427,13 @@ def _execute(args, cfg, plan, kind):
         "n_items": plan["n_items"],
         "trials": cfg["run"]["trials"],
         "requests": len(records),
+        # 走监控池时，选中的题里有多少道轮间 SD 没测过。
+        # 这个数决定「假告警率有没有测量约束」，必须进结论卡。
+        "monitor_only": plan.get("monitor_only", False),
+        "sd_unmeasured": sum(
+            1 for it in plan["items"]
+            if not (((plan["manifest"].get("items") or {})
+                     .get(it["id"]) or {}).get("sd_measured", True))),
         "started_at": started,
         "started_str": time.strftime("%Y-%m-%d %H:%M:%S",
                                      time.localtime(started)),
@@ -744,8 +777,10 @@ def cmd_compare(args):
         if va.get("score") is None or vb.get("score") is None:
             continue
         m = min(va.get("n_items") or 0, vb.get("n_items") or 0)
-        show, _style, _why = tiers.dim_display(m)
-        t = tiers.dim_threshold(m) if m else 0
+        # 两轮的采样次数可能不同，取小者 —— 阈值宁可宽不可窄。
+        tr = min(sa.get("trials") or 3, sb.get("trials") or 3)
+        show, _style, _why = tiers.dim_display(m, tr)
+        t = tiers.dim_threshold(m, tr) if m else 0
         diff = 100 * (vb["score"] - va["score"])
         rows.append({"dim": dim, "a": 100 * va["score"], "b": 100 * vb["score"],
                      "diff": diff, "threshold": t, "significant": abs(diff) > t,
@@ -788,10 +823,15 @@ def cmd_bank(args):
         _die(e, as_json=getattr(args, "json", False))
 
     st = bankmod.stats(items)
-    mon = [i for i in items if (mf["items"].get(i["id"]) or {}).get("monitor_ok")]
+    ent = mf["items"]
+    pool = [i for i in items
+            if (ent.get(i["id"]) or {}).get("monitor_pool",
+                                            (ent.get(i["id"]) or {})
+                                            .get("monitor_ok"))]
+    measured = [i for i in pool if (ent.get(i["id"]) or {}).get("monitor_ok")]
     L = ["== 题库 %s ==" % mf["bank_rev"],
-         "冻结于 %s ｜ %d 题 ｜ 可用于监控 %d 题"
-         % (mf.get("created_at"), st["total"], len(mon)),
+         "冻结于 %s ｜ %d 题 ｜ 监控池 %d 题（其中轮间 SD 已实测 %d 题）"
+         % (mf.get("created_at"), st["total"], len(pool), len(measured)),
          "", "| 维度 | 题数 | 可展示 |", "|---|---:|---|"]
     for d, n in sorted(st["by_dim"].items()):
         show, style, why = tiers.dim_display(n)
@@ -820,7 +860,10 @@ def cmd_bank(args):
                         "✓" if m.get("monitor_ok") else "—",
                         i.get("title", "")))
     return _emit(args, {"manifest": mf, "stats": st,
-                        "monitor_items": [i["id"] for i in mon],
+                        # 两个口径都给：池子是监控档实际选题的范围，
+                        # measured 是其中轮间 SD 已实测的部分。
+                        "monitor_items": [i["id"] for i in pool],
+                        "monitor_measured_items": [i["id"] for i in measured],
                         "skipped": skipped}, L)
 
 
@@ -840,9 +883,11 @@ def cmd_config(args):
                         ("%s（%s）" % (ks["masked"], ks["source"]))
                         if ks["set"] else "未设置：%s" % e["key_env"],
                         "✓" if e["default"] else ""))
-        L += ["", "密钥永远不写进 config/models/*.json——那些文件要进版本管理。",
+        L += ["", "填密钥：mprobe config key --model <端点>（不回显，"
+                  "存进 config/secrets.local.json）",
               "本地文件 %s %s" % (paths.SECRETS,
-                                  "存在" if secrets.file_exists() else "不存在")]
+                                  "存在" if secrets.file_exists() else "不存在"),
+              "密钥永远不写进 config/models/*.json——那些文件要进版本管理。"]
         return _emit(args, {"endpoints": eps}, L)
 
     if args.action == "key":
@@ -869,7 +914,10 @@ def cmd_config(args):
                      ["已保存 %s = %s（%s）" % (env, st["masked"],
                                                secrets.SOURCE_LABEL.get(
                                                    st["source"], st["source"])),
-                      "会话内存只在当前进程有效；计划任务要用用户级环境变量。"])
+                      ("存进了 %s，计划任务也读得到，不必再设环境变量。"
+                       % paths.SECRETS) if st["source"] == "file" else
+                      "会话内存只在当前进程有效，退出即失效；要长期生效"
+                      "去掉 --store session。"])
 
     # test
     cfg = _endpoint(args)
@@ -1035,8 +1083,11 @@ def build_parser():
     cf.add_argument("action", choices=["list", "key", "test"], nargs="?",
                     default="list")
     cf.add_argument("--value", help="密钥值（不给则交互输入，不回显）")
-    cf.add_argument("--store", choices=["session", "file"], default="session",
-                    help="session=只在本进程；file=写 config/secrets.local.json")
+    # 默认写文件。session 只在当前进程有效，装完就没了，
+    # 作为默认值等于让人白填一遍。
+    cf.add_argument("--store", choices=["session", "file"], default="file",
+                    help="file=写 config/secrets.local.json（默认）；"
+                         "session=只在本进程有效")
     cf.add_argument("--clear", action="store_true")
 
     sc = common(sub.add_parser("schedule", help="Windows 计划任务"))
