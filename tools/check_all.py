@@ -125,8 +125,14 @@ def group_script(idx, title, script):
         if line.strip().startswith(("✓", "✗", "⚠", "对不上",
                                     "通过", "未通过")):
             print("  " + line.strip())
-    item(title, script, p.returncode == 0,
-         "退出码 %d" % p.returncode)
+    # 失败时把脚本输出的尾部带出来。只转发匹配前缀的行会把异常退出的
+    # 原因整段丢掉 —— 表现为「退出码 1」但一条 ✗ 都没有，无从排查。
+    detail = "退出码 %d" % p.returncode
+    if p.returncode != 0:
+        tail = [x.strip() for x in out.splitlines() if x.strip()][-3:]
+        if tail:
+            detail += "；末尾输出：" + " | ".join(tail)
+    item(title, script, p.returncode == 0, detail)
 
 
 # --------------------------------------------------------------------------

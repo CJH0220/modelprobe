@@ -1,14 +1,16 @@
 # 部署手册
 
-> 从上往下一条一条敲。每步都给了**敲完应该看到什么**。
-> 需要 Python ≥ 3.9，不需要装任何第三方包。
-> 装完之后日常怎么用，见 [`GUIDE.md`](GUIDE.md)。
+> 本文给出从获取代码到投入运行的完整规程，并在每一步给出预期输出。
+> 日常操作参见 [`GUIDE.md`](GUIDE.md)；题库与指标定义参见
+> [`BANK_AND_METRICS.md`](BANK_AND_METRICS.md)。
+>
+> 要求 Python ≥ 3.9，无第三方运行时依赖。
 
 ---
 
-# 第一部分 · 装
+# 一 · 安装
 
-## 1. 取代码
+## 1. 获取代码
 
 ```bash
 git clone https://github.com/CJH0220/modelprobe.git
@@ -16,7 +18,8 @@ cd modelprobe
 git checkout v1.1.0
 ```
 
-第三行不要省。查有哪些版本用 `git tag`。
+第三行不可省略：版本号即 `bank_rev`，跟随 `main` 会在某次 `git pull` 后
+使既有基线失效。可用版本以 `git tag` 为准。
 
 ## 2. 自检
 
@@ -24,23 +27,24 @@ git checkout v1.1.0
 python tools/check_all.py
 ```
 
-看最后两行：
-
 ```
 ============================================================
 总计 43 项，通过 43，未通过 0
 ```
 
-**`未通过` 必须是 0**，不是 0 就停下，别往下走。
+**`未通过` 必须为 0，否则不得继续部署。**
 
-中间会有一条 `⚠ 未验证`，刚装完出现这条是正常的：
+首次安装时会出现一条 `未验证`，属正常：
 
 ```
-  ⚠ 未验证 跨 bank_rev 比较 → 拒绝  —— 本机还没有结果库（全新 clone 时属正常，跑过一轮后即可验）
+  ⚠ 未验证 跨 bank_rev 比较 → 拒绝  —— 本机还没有结果库
   通过 16 ／ 未通过 0 ／ 未验证 1
 ```
 
-## 3. 确认能跑
+该项需要结果库中存在两个不同 `bank_rev` 的轮次才能构造，
+采集一轮之后即可验证。未验证不计入失败。
+
+## 3. 校验题库
 
 ```bash
 python -m mprobe bank info
@@ -51,26 +55,24 @@ python -m mprobe bank info
 冻结于 2026-08-21 15:07:37 ｜ 253 题 ｜ 监控池 224 题（其中轮间 SD 已实测 35 题）
 ```
 
-看到 `题库 1.1.0` 和 `253 题` 就对了。
+题库每次加载校验 sha256。若报「题库校验失败，拒绝运行」，
+以 `git clone` 重新获取，不要使用 zip 解压——换行转换会破坏校验。
 
-> 报 `题库校验失败，拒绝运行` 的话，用 `git clone` 重新取一次，不要用 zip 解压。
-
-## 4.（可选）装成系统命令
+## 4. 安装为系统命令（可选）
 
 ```bash
 pip install -r requirements-dev.txt
 pip install -e .
-mprobe --help
 ```
 
-装完 `mprobe` 等于 `python -m mprobe`，但**仍然要在仓库目录里执行**。
-不装也能用，跳过这步没有任何影响。
+安装后 `mprobe` 等价于 `python -m mprobe`，但仍须在仓库目录内执行。
+不安装不影响任何功能。
 
 ---
 
-# 第二部分 · 配
+# 二 · 配置
 
-## 5. 看现有端点
+## 5. 查看端点
 
 ```bash
 python -m mprobe config list
@@ -84,59 +86,52 @@ python -m mprobe config list
 | qwen | qwen3.6-flash | b3504bcdec06 | 未设置：DASHSCOPE_API_KEY |  |
 ```
 
-`密钥` 那列写 `未设置：XXX` 就是缺密钥。
+密钥列显示 `未设置：<变量名>` 表示尚未配置。
 
-## 6. 填密钥
+## 6. 配置密钥
 
 ```bash
 python -m mprobe config key --model deepseek
 ```
 
-输入时不回显。存进 `config/secrets.local.json`，这个文件不进版本管理。
-
-再跑一次第 5 步，密钥那列变成 `sk-…xxxx（file）` 就成了：
+输入不回显，写入 `config/secrets.local.json`（不纳入版本管理）。
+重新执行第 5 步，密钥列应为：
 
 ```
 | deepseek | deepseek-v4-flash | c1079e441bbb | sk-…a278（file） | ✓ |
 ```
 
-**不用关终端重开，计划任务也读得到。**
+该文件优先级高于环境变量，计划任务同样可读，无需重启终端。
+工具在任何路径下只输出掩码。
 
-> 也可以直接编辑 `config/secrets.local.json`：
-> `{ "DEEPSEEK_API_KEY": "你的密钥" }`
->
-> 想用环境变量也行（那列会显示 `（env）`），但要新开终端才生效。
-> 同名时文件优先。
+> 也可直接编辑 `config/secrets.local.json`：`{ "DEEPSEEK_API_KEY": "..." }`
+> 使用环境变量亦可（密钥列显示 `（env）`），但须新开终端。
 
-## 7. 加自己的端点
+## 7. 新增端点
 
 ```bash
 cp config/models/_template.json config/models/myapi.json
 ```
 
-打开 `config/models/myapi.json`，填这几项：
-
-| 要填的 | 填什么 |
+| 字段 | 说明 |
 |---|---|
-| `model.base_url` | 端点地址 |
-| `model.model` | 模型名 |
+| `model.base_url` `model.model` | 端点地址与模型标识 |
 | `model.api_style` | `openai` 或 `anthropic` |
-| `model.api_key_env` | 密钥的名字，例如 `MYAPI_API_KEY` |
-| `model.max_tokens` | 先填 32000 |
-| `run.qps` | 端点有限速就填，没有就删掉这行 |
-| `pricing` | **可选**。不填就不报价，其余照常 |
+| `model.api_key_env` | 密钥变量名 |
+| `model.max_tokens` | 初值取 32000，见第 10 步 |
+| `run.qps` | 限速网关须填，否则耗时估算失真 |
+| `pricing` | 可选。缺失时不报价，其余功能不受影响 |
 
-**这个文件里不要写密钥。** 填完跑第 5 步确认它出现在表里，
-文件名就是以后 `--model` 用的名字（`myapi.json` → `--model myapi`）。
-然后回第 6 步填密钥。
+该文件纳入版本管理，**不得写入密钥**。文件名即 `--model` 参数值。
+`model` 的四个字段构成端点指纹，任一变更使既有基线失效。
 
 ---
 
-# 第三部分 · 跑
+# 三 · 采集与判定
 
-下面把 `deepseek` 换成你自己的端点名。
+以下命令中的 `deepseek` 替换为目标端点。
 
-## 8. 先看要花多少钱
+## 8. 估算成本
 
 ```bash
 python -m mprobe eval --model deepseek --tier monitor --dry-run
@@ -147,28 +142,22 @@ python -m mprobe eval --model deepseek --tier monitor --dry-run
 模型 deepseek（c1079e441bbb）· 档位 monitor · 题库 1.1.0
 最小可检出退化 8.6 分 ｜ 95% 区间半宽 ±8.4 分
 预估花费 0.19 CNY ｜ 预估耗时 4 分钟
-119 题 x 1 次 = 119 次请求，并发 4，输入约 20,753 token、输出约 83,300 token
+119 题 x 1 次 = 119 次请求，并发 4，输入约 19,779 token、输出约 83,300 token
 ```
 
-`--dry-run` 不发请求、不花钱。
+`--dry-run` 不发请求。**耗时估值在该档位首次执行前偏低**——它依据本机
+历史实测推算，无历史数据时按理论值计算。`monitor` 档实测约 13 分钟。
+费用估值不受此影响。
 
-> **耗时这个数第一次会偏低。** 它靠本机跑过的历史数据推算，
-> 一个档位没跑过就只能按理论算。`monitor` 档实测约 13 分钟，
-> 跑过一轮后估值就准了。花费那个数不受影响。
+各档位规模与分辨率以 `python -m mprobe tiers` 为准。
 
-想看别的档位有多大多贵：
-
-```bash
-python -m mprobe tiers
-```
-
-## 9. 跑第一轮
+## 9. 采集首轮
 
 ```bash
 python -m mprobe eval --model deepseek --tier monitor --yes
 ```
 
-跑完打开 `data/runs/<run_id>/report.md`，看两处：
+完成后核对 `data/runs/<run_id>/report.md` 的两项：
 
 ```
 - 请求成功 119/119，失败率 0.0%
@@ -178,25 +167,25 @@ python -m mprobe eval --model deepseek --tier monitor --yes
 | 输出被截断 | 0（其中 0 次完全没有可见内容） |
 ```
 
-失败率高的这轮不要用；截断不是 0 就去做第 10 步。
+失败率偏高的轮次不得纳入基线；截断非 0 转第 10 步。
 
-## 10. 如果有截断
+## 10. 确定 `max_tokens`
 
-打开 `config/models/<端点>.json`，把 `max_tokens` 调大（32000 → 64000），
-然后重跑第 9 步，直到 `截断 0`。
+推理模型的输出 token 绝大部分消耗于推理过程。截断导致的 0 分是配额问题，
+不是能力问题。若第 9 步的截断计数非 0，调大 `config/models/<端点>.json`
+的 `max_tokens`（32000 → 64000）后重新采集，直至截断为 0。
 
-**这一步必须在建基线之前做完。** 改完 `max_tokens` 之前跑的轮次不能再用。
+**该值须在建立基线之前确定。** 变更它会改变端点指纹，既有基线随之失效。
 
-## 11. 再跑四轮
+## 11. 补足基线轮次
+
+`monitor` 档需 5 轮：
 
 ```bash
 python -m mprobe eval --model deepseek --tier monitor --yes
-python -m mprobe eval --model deepseek --tier monitor --yes
-python -m mprobe eval --model deepseek --tier monitor --yes
-python -m mprobe eval --model deepseek --tier monitor --yes
 ```
 
-跑完确认五轮的配置一致：
+重复至累计 5 轮，随后核对各轮配置一致：
 
 ```bash
 python -m mprobe status
@@ -207,42 +196,40 @@ python -m mprobe status
 | run_id | 类型 | 模型 | 档 | 分数 | 请求 | 失败 | 健康 |
 |---|---|---|---|---:|---:|---:|---|
 | deepseek-monitor-eval-20260821-095247 | eval | deepseek | monitor | 91.7 | 42 | 0 | ok |
-| deepseek-monitor-eval-20260821-094924 | eval | deepseek | monitor | 90.7 | 42 | 0 | ok |
 ```
 
-`健康` 都是 `ok`、`失败` 都是 0 就往下走。
+`健康` 均为 `ok`、`失败` 均为 0 方可继续。存在 `endpoint_sha` 或
+`bank_rev` 不一致的轮次即不得纳入同一基线。
 
-## 12. 建基线
+## 12. 建立基线
 
 ```bash
 python -m mprobe baseline --build --model deepseek --tier monitor
 ```
 
-不发请求、不花钱，用第 9、11 步已经跑好的数据算。看第二行：
+不发请求，复用第 9、11 步的数据。预期输出三行：
 
 ```
-基线均值 <你的分数> 分，σ = <你的 σ>（取自：…）
-告警阈值 = 均值 − 2σ = **<你的阈值> 分**
+基线均值 <均值> 分，σ = <σ>（取自：…）
+告警阈值 = 均值 − 2σ = **<阈值> 分**
 建自 5 轮，每轮 116 次请求
 ```
 
-出现 `告警阈值` 那行就成了。
+出现 `**这是临时基线**` 表示轮数不足 5 轮，补足后自动转正。
 
-> 多出一行 `**这是临时基线**` 说明轮数还不够五轮，补够会自动转正。
-
-## 13. 做一次判定
+## 13. 首次判定
 
 ```bash
 python -m mprobe check --model deepseek --tier monitor --yes
 ```
 
-输出是 `正常` / `观察` / `告警` 三种之一。**到这里部署就算完成了。**
+输出 `正常` / `观察` / `告警` 之一。**部署至此完成。**
 
 ---
 
-# 第四部分 · 挂上（都可选）
+# 四 · 接入（均为可选）
 
-## 14. 每天自动跑
+## 14. 定时任务
 
 Windows：
 
@@ -251,36 +238,37 @@ python -m mprobe schedule install --model deepseek --tier monitor --cadence dail
 python -m mprobe schedule status --json
 ```
 
-第二条的输出里 `"exists": true` 才算装上。没装上会显示：
+第二条命令输出中 `"exists": true` 方为安装成功。未安装时显示：
 
 ```
 mprobe_deepseek_small：不存在
   note = 系统里没有这个任务（哪怕配置里写着有）
 ```
 
-Linux / macOS 用 cron：
+Linux / macOS 使用 cron：
 
 ```cron
 0 9 * * * cd /path/to/modelprobe && /usr/bin/python3 -m mprobe check \
           --model deepseek --tier monitor --yes >> /var/log/mprobe.log 2>&1
 ```
 
-**`--yes` 不能省。** 退出码 `1` 就是告警。
+**`--yes` 不可省略**：无人在场时缺少该参数一律视为拒绝。
+退出码 `1` 即告警信号。
 
-## 15. 告警推送到群
+## 15. 告警推送
 
-新建 `config/notify.json`：
+`config/notify.json`，不存在则不推送且不报错：
 
 ```json
 {
   "enabled": true,
-  "webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/你的地址",
+  "webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/...",
   "policy": "abnormal"
 }
 ```
 
-`policy` 填 `abnormal` 就只在观察／告警时推。webhook 必须是 `https`。
-不建这个文件就不推送，也不报错。
+`policy` 取 `abnormal` 时仅在观察／告警态推送。webhook 必须为 https。
+显示时仅保留域名与前两段路径。推送失败不影响判定结果。
 
 ## 16. 浏览器界面
 
@@ -294,160 +282,140 @@ python -m mprobe web
 Ctrl-C 停止
 ```
 
-浏览器打开那个地址。界面只能看，不能改东西。
+仅绑定回环地址，不提供 `--host` 参数。界面为只读，POST 一律返回 405。
 
-## 17. 装进 Claude
-
-```bash
-python install.py
-```
-
-先只打印将要改什么，不动文件：
-
-```
-mprobe 安装 —— 根目录 <仓库目录>
-模式：预演（不改任何文件）
-
-[1/4] 自检
-  ✓ Python 3.14.7
-  ✓ 目录结构完整
-  ✓ data/ 可写
-  ✓ 题库 1.1.0，253 道题
-```
-
-看着没问题再真写：
+## 17. MCP 与 Skill
 
 ```bash
-python install.py --apply
+python install.py            # 预演，不改文件
+python install.py --apply    # 写入
 ```
 
-装完**新开一个 Claude 会话**，直接说「测一下 deepseek 什么水平」。
-
-> 打印 `**不覆盖。**` 说明那一项已经存在且内容不同，需要手动处理。
+写入五处用户级配置，均先备份并打印 diff；已存在且内容不同时不覆盖，
+打印 `**不覆盖。**` 并跳过。安装后须新开会话才会被发现。
 
 ---
 
-# 第五部分 · 装完核对
+# 五 · 部署后核对
 
-一条一条跑，对上右边就行：
-
-| 跑什么 | 要看到 |
+| 命令 | 通过判据 |
 |---|---|
 | `python tools/check_all.py` | `未通过 0` |
-| `python tools/check_deps.py` | `零第三方依赖` |
+| `python tools/check_deps.py` | 零第三方依赖 |
 | `python -m mprobe bank info` | `题库 1.1.0`、`253 题` |
-| `python -m mprobe config list` | 你的端点，密钥列是 `sk-…` |
-| `python -m mprobe eval --model X --tier monitor --dry-run` | 有花费和耗时，不报 `渠道不通` |
-| `python -m mprobe baseline --model X --tier monitor` | `告警阈值 = 均值 − 2σ` |
-| `python -m mprobe check --model X --tier monitor --dry-run` | 不报 `选不出足够的题` |
+| `python -m mprobe config list` | 目标端点密钥列为 `sk-…` |
+| `python -m mprobe eval --model X --tier monitor --dry-run` | 不报「渠道不通」 |
+| `python -m mprobe baseline --model X --tier monitor` | 输出 `告警阈值` |
+| `python -m mprobe check --model X --tier monitor --dry-run` | 不报「选不出足够的题」 |
 | `python -m mprobe schedule status --json` | `"exists": true` |
-| `python tools/inventory.py` | 跑完无报错 |
+| `python tools/inventory.py` | 无报错 |
 
 ---
 
-# 第六部分 · 出错对照表
+# 六 · 故障对照
 
-| 报什么 | 怎么办 |
+| 现象 | 处置 |
 |---|---|
-| `题库校验失败，拒绝运行` | 用 `git clone` 重新取，别用 zip |
-| `找不到端点配置` | `--model` 后面要写 `config/models/` 里的**文件名**，不带 `.json` |
-| 账单显示 `未知（价格未配置）` | 正常。要看花费就在端点 json 里补 `pricing` 段 |
-| `渠道不通` 但端点确实能用 | 端点 json 里加一行 `"probe_timeout": 60` |
-| 密钥填了还说 `未设置` | 用 `mprobe config key --model X` 重填；若用的是环境变量，要新开终端 |
-| `选不出足够的题` | 换 `--tier monitor` |
-| 某个维度全是 0 分 | 看有没有截断，有就调大 `max_tokens` 重跑 |
-| `这条序列还没有基线` | 还没建过。先做第 12 步 |
-| `没有可用于建基线的轮次` | 那几轮和当前配置对不上。四项必须全同：模型、端点指纹、**题库版本**、档位。用 `python -m mprobe status --json` 逐项核对 |
-| `run 不存在` | run_id 打错了，用 `python -m mprobe status` 抄 |
+| `题库校验失败，拒绝运行` | 以 `git clone` 重新获取，勿用 zip |
+| `找不到端点配置` | `--model` 取 `config/models/` 下的文件名，不含扩展名 |
+| 账单显示 `未知（价格未配置）` | 属正常。需要报价则补 `pricing` 段 |
+| `渠道不通` 但端点可用 | 端点 json 增加 `"probe_timeout": 60` |
+| 密钥已配置仍报未设置 | 以 `mprobe config key` 重新写入；使用环境变量时须新开终端 |
+| `选不出足够的题` | 监控口径下该档位配额无法填满，改用 `--tier monitor` |
+| 某维度得分全为 0 | 先排查截断，调大 `max_tokens` 后重新采集 |
+| `这条序列还没有基线` | 执行第 12 步 |
+| `没有可用于建基线的轮次` | 四项须全同：模型、端点指纹、题库版本、档位。以 `status --json` 逐项核对 |
+| `run 不存在` | run_id 有误，以 `python -m mprobe status` 的输出为准 |
 | `pip install -e .` 报 `BackendUnavailable` | 先 `pip install -r requirements-dev.txt` |
-| 在别的目录敲 `mprobe` 报找不到 `banks/` | 回到仓库目录再敲 |
-| 界面打开是空白 | 换个端口：先看启动时打印的地址对不对 |
-| 定时任务没跑 | 查三个：`"exists": true`、命令里有 `--yes`、密钥是用户级 |
+| 在仓库外执行 `mprobe` 报找不到 `banks/` | 须在仓库目录内执行 |
+| 界面页面为空 | 核对启动日志中打印的实际端口 |
+| 定时任务未执行 | 依次核对 `"exists": true`、命令含 `--yes`、密钥位于 `secrets.local.json` |
 
 ---
 
-# 卸载
+# 七 · 升级与回退
 
-## 1. 先看要删什么（不动文件）
+```bash
+git fetch --tags
+git tag
+git checkout v<目标版本>
+python tools/check_all.py
+```
+
+版本号即 `bank_rev`。**换版本后基线须重建**（第 9–12 步）。
+`data/` 不纳入版本管理，回退不影响运行产物；但基线与 `bank_rev` 绑定，
+二者不一致时判定会被拒绝。
+
+判分器变更后可用存档重算，无需重新采样：
+
+```bash
+python tools/probe_analyze.py data/runs/<run_id> --write
+```
+
+**不要删除 `data/runs/*/raw.jsonl`。**
+
+---
+
+# 八 · 卸载
+
+## 1. 预演
 
 ```bash
 python install.py --uninstall
 ```
 
 ```
-mprobe 卸载 —— 根目录 <仓库目录>
-模式：预演（不改任何文件）
-
 [1/4] MCP 配置
 [2/4] Skill
-  → 将删除 C:\Users\<你>\.claude\skills\mprobe-eval（与仓库一致）
+  → 将删除 <用户目录>\.claude\skills\mprobe-eval（与仓库一致）
 [3/4] 计划任务
-  = 没有已安装的计划任务
 [4/4] 仓库内的东西（本脚本**不动**，要删自己删）
 ```
 
-只删本脚本装的东西，且只在它没被改过时才删。
-指向别的目录、或你自己改过的，会打印 `**不动它**` 并跳过。
+仅删除本脚本写入且未被修改的内容。指向其他目录或内容已变更的条目
+打印 `**不动它**` 并跳过。
 
-## 2. 真删
+## 2. 执行
 
 ```bash
 python install.py --uninstall --apply
 ```
 
-改动过的文件旁边会留 `.bak` 备份。
+被修改的文件旁保留 `.bak` 备份。
 
-## 3. 删定时任务
-
-上一步会把还在的任务列出来，照着敲：
+## 3. 定时任务
 
 ```bash
 python -m mprobe schedule remove --model deepseek --tier monitor
 python -m mprobe schedule status --json
 ```
 
-`exists` 变成 `false` 就删掉了。
+`"exists": false` 即已移除。
 
-## 4. 卸掉 pip 包（只有装过方式二才需要）
+## 4. pip 包
 
 ```bash
 pip uninstall mprobe
 ```
 
-## 5. 删仓库
+仅在执行过第 4 步时需要。
 
-直接删掉这个文件夹。**会连带删掉两样东西**，删之前想清楚：
+## 5. 删除仓库目录
 
-| 一起消失的 | 里面是什么 |
+将连带删除两项内容，确认后再执行：
+
+| 一并删除 | 内容 |
 |---|---|
-| `data/` | 全部测评结果、基线、响应原文。删了只能重新花钱跑 |
-| `config/secrets.local.json` | 你填的密钥 |
+| `data/` | 全部测评结果、基线、响应原文 |
+| `config/secrets.local.json` | 密钥 |
 
-想留结果就先把 `data/` 拷走。
+需保留结果则先转移 `data/`。
 
-## 6. 确认干净了
+## 6. 确认
 
 ```bash
 python -m mprobe --help
 ```
 
-报找不到模块就是删干净了。
-
-**工具不往别处写文件**——除了上面列的这些，系统里没有残留：
-没有注册表项、没有服务、没有临时目录里的缓存。
-
----
-
-# 升级和回退
-
-```bash
-git fetch --tags
-git tag                      # 看有哪些版本
-git checkout v<新版本>
-python tools/check_all.py
-```
-
-**换版本后基线要重建**，回第 9 到 12 步。
-回退用 `git checkout v<旧版本>`，`data/` 里的东西不受影响。
-
-> 不要删 `data/` 目录。
+报找不到模块即已清除。工具不在其他位置写入文件：无注册表项、
+无服务、无临时目录缓存。
